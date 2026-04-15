@@ -32,21 +32,6 @@ def get_chromecasts():
         for cc in chromecasts
     ]
 
-def get_sonos():
-    devices = soco.discover()
-    if not devices:
-        return []
-    return [
-        {
-            "type": "sonos",
-            "friendly_name": device.player_name,
-            "slug": device.player_name.lower().replace(" ", "_"),
-            "host": device.ip_address,
-            "port": 1400  # Sonos default port
-        }
-        for device in devices
-    ]
-
 def get_chromecast(ip, port) -> pychromecast.Chromecast:
     if (ip, port) not in chromecast_cache:
         cc = pychromecast.get_chromecast_from_host(
@@ -110,6 +95,21 @@ def get_playback_status(chromecast: pychromecast.Chromecast):
 
 
 # --- Sonos helpers ---
+def get_sonos():
+    devices = soco.discover()
+    if not devices:
+        return []
+    return [
+        {
+            "type": "sonos",
+            "friendly_name": device.player_name,
+            "slug": device.player_name.lower().replace(" ", "_"),
+            "host": device.ip_address,
+            "port": 1400  # Sonos default port
+        }
+        for device in devices
+    ]
+
 def get_sonos_by_slug(slug):
     if slug in sonos_names_cache:
         return sonos_names_cache[slug]
@@ -118,6 +118,44 @@ def get_sonos_by_slug(slug):
 def get_sonos_volume(device):
     """Return Sonos volume normalized to 0-1."""
     return device.volume / 100.0
+
+def play_sonos_media(device, url):
+    if not device or not url:
+        return jsonify({"error": "Invalid device or url"}), 400
+    device.play_uri(uri=url, force_radio=True)
+    return jsonify({"status": "playing", "url": url})
+
+def pause_sonos(device):
+    if not device:
+        return jsonify({"error": "Invalid device"}), 400
+    device.pause()
+    return jsonify({"status": "paused"})
+
+def stop_sonos(device):
+    if not device:
+        return jsonify({"error": "Invalid device"}), 400
+    device.stop()
+    return jsonify({"status": "stopped"})
+
+def set_sonos_volume(device, volume):
+    if not device or volume is None:
+        return jsonify({"error": "Invalid device or volume"}), 400
+    device.volume = int(float(volume) * 100)
+    return jsonify({"status": "volume set", "volume": device.volume / 100.0})
+
+def adjust_sonos_volume(device, delta):
+    if not device or delta is None:
+        return jsonify({"error": "Invalid device or delta"}), 400
+    device.set_relative_volume(int(float(delta) * 100))
+    return jsonify({"status": "volume changed", "volume": device.volume / 100.0})
+
+def get_sonos_playback_status(device):
+    if not device:
+        return jsonify({"error": "Invalid device"}), 400
+    info = device.get_current_transport_info()
+    state = info.get('current_transport_state', 'STOPPED')
+    status = "PLAYING" if state == "PLAYING" else "IDLE"
+    return jsonify({"status": status})
 
 def update_device_cache():
     while True:
@@ -136,7 +174,6 @@ def update_device_cache():
             sonos_cache[device.ip_address] = device
             sonos_names_cache[slug] = device
         time.sleep(CACHE_UPDATE_INTERVAL)
-
 
 # Discover both Chromecast and Sonos devices concurrently
 @app.route('/get-devices', methods=['GET'])
@@ -223,28 +260,49 @@ def get_state_by_ip_port():
 def play_url_by_slug():
     data = request.json
     slug = data.get('slug')
-    cc = get_chromecast_by_slug(slug)
-    if not cc:
-        return jsonify({"error": "Invalid slug"}), 400
-    return play_media(cc, data.get('url'), data.get('mediaType', 'audio/mp3'))
+    device_type = data.get('type', 'chromecast')
+    if device_type == 'sonos':
+        device = get_sonos_by_slug(slug)
+        if not device:
+            return jsonify({"error": "Invalid slug for Sonos"}), 400
+        return play_sonos_media(device, data.get('url'))
+    else:
+        cc = get_chromecast_by_slug(slug)
+        if not cc:
+            return jsonify({"error": "Invalid slug"}), 400
+        return play_media(cc, data.get('url'), data.get('mediaType', 'audio/mp3'))
 
 @app.route('/device/slug/pause', methods=['POST'])
 def pause_by_slug():
     data = request.json
     slug = data.get('slug')
-    cc = get_chromecast_by_slug(slug)
-    if not cc:
-        return jsonify({"error": "Invalid slug"}), 400
-    return pause_media(cc)
+    device_type = data.get('type', 'chromecast')
+    if device_type == 'sonos':
+        device = get_sonos_by_slug(slug)
+        if not device:
+            return jsonify({"error": "Invalid slug for Sonos"}), 400
+        return pause_sonos(device)
+    else:
+        cc = get_chromecast_by_slug(slug)
+        if not cc:
+            return jsonify({"error": "Invalid slug"}), 400
+        return pause_media(cc)
 
 @app.route('/device/slug/stop', methods=['POST'])
 def stop_by_slug():
     data = request.json
     slug = data.get('slug')
-    cc = get_chromecast_by_slug(slug)
-    if not cc:
-        return jsonify({"error": "Invalid slug"}), 400
-    return stop_media(cc)
+    device_type = data.get('type', 'chromecast')
+    if device_type == 'sonos':
+        device = get_sonos_by_slug(slug)
+        if not device:
+            return jsonify({"error": "Invalid slug for Sonos"}), 400
+        return stop_sonos(device)
+    else:
+        cc = get_chromecast_by_slug(slug)
+        if not cc:
+            return jsonify({"error": "Invalid slug"}), 400
+        return stop_media(cc)
 
 @app.route('/device/slug/volume', methods=['POST'])
 def volume_by_slug():
@@ -267,40 +325,59 @@ def volume_by_slug():
 def set_volume_by_slug():
     data = request.json
     slug = data.get('slug')
-    cc = get_chromecast_by_slug(slug)
-    if not cc:
-        return jsonify({"error": "Invalid slug"}), 400
-    return set_volume(cc, data.get('volume'))
+    device_type = data.get('type', 'chromecast')
+    if device_type == 'sonos':
+        device = get_sonos_by_slug(slug)
+        if not device:
+            return jsonify({"error": "Invalid slug for Sonos"}), 400
+        return set_sonos_volume(device, data.get('volume'))
+    else:
+        cc = get_chromecast_by_slug(slug)
+        if not cc:
+            return jsonify({"error": "Invalid slug"}), 400
+        return set_volume(cc, data.get('volume'))
 
 @app.route('/device/slug/volume/delta', methods=['POST'])
 def volume_delta_by_slug():
     data = request.json
     slug = data.get('slug')
-    cc = get_chromecast_by_slug(slug)
-    if not cc:
-        return jsonify({"error": "Invalid slug"}), 400
-    return adjust_volume(cc, data.get('delta'))
-
-
+    device_type = data.get('type', 'chromecast')
+    if device_type == 'sonos':
+        device = get_sonos_by_slug(slug)
+        if not device:
+            return jsonify({"error": "Invalid slug for Sonos"}), 400
+        return adjust_sonos_volume(device, data.get('delta'))
+    else:
+        cc = get_chromecast_by_slug(slug)
+        if not cc:
+            return jsonify({"error": "Invalid slug"}), 400
+        return adjust_volume(cc, data.get('delta'))
 
 @app.route('/device/slug/state', methods=['POST'])
 def get_state_by_slug():
     data = request.json
     slug = data.get('slug')
-
-    cc = get_chromecast_by_slug(slug)
-    if not cc:
-        return jsonify({"error": "Invalid slug"}), 400
-
-    playback_status = get_playback_status(cc)
-    volume = get_volume(cc)
-
-    state_data = {
-        'status': playback_status.json['status'],
-        'volume': volume.json['volume']
-    }
-
-    return jsonify(state_data)
+    device_type = data.get('type', 'chromecast')
+    if device_type == 'sonos':
+        device = get_sonos_by_slug(slug)
+        if not device:
+            return jsonify({"error": "Invalid slug for Sonos"}), 400
+        playback_status = get_sonos_playback_status(device)
+        volume = get_sonos_volume(device)
+        return jsonify({
+            'status': playback_status.json['status'],
+            'volume': volume
+        })
+    else:
+        cc = get_chromecast_by_slug(slug)
+        if not cc:
+            return jsonify({"error": "Invalid slug"}), 400
+        playback_status = get_playback_status(cc)
+        volume = get_volume(cc)
+        return jsonify({
+            'status': playback_status.json['status'],
+            'volume': volume.json['volume']
+        })
 
 def start_device_cache_updater():
     threading.Thread(target=update_device_cache).start()
