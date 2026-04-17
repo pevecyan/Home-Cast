@@ -1,0 +1,51 @@
+:root {
+  --app-bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --border-color: #e0e0e0;
+  --hover-bg: rgba(0, 0, 0, 0.03);
+  --placeholder-bg: #eee;
+  --placeholder-color: #bbb;
+  --subtle-bg: #f8f8f8;
+  --surface-dim: rgba(0, 0, 0, 0.06);
+}
+
+.dark {
+  --app-bg: #121212;
+  --card-bg: #1e1e1e;
+  --text-primary: #e8e8e8;
+  --text-secondary: #999999;
+  --border-color: #2e2e2e;
+  --hover-bg: rgba(255, 255, 255, 0.05);
+  --placeholder-bg: #2a2a2a;
+  --placeholder-color: #555;
+  --subtle-bg: #252525;
+  --surface-dim: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--app-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.p-dialog-close-button,
+.p-dialog-close-button:focus,
+.p-dialog-close-button:focus-visible,
+.p-dialog-close-button:active {
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+}

@@ -1,0 +1,14 @@
+# Home-Cast configuration
+# Copy this file to config.yaml and adjust for your environment
+
+# LAN URL where this server is reachable by speakers (Chromecast/Sonos must be able to fetch audio from here)
+hostname: "http://192.168.1.100:5000"
+
+# Port for the Flask backend
+port: 5000
+
+cache:
+  # How long to keep downloaded audio files (seconds)
+  ttl: 3600
+  # Directory to store cached audio files
+  dir: "./cache"

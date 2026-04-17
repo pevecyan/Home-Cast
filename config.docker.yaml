@@ -1,0 +1,8 @@
+# Docker config - hostname must be your LAN IP so speakers can reach this server
+# Override with APP_HOSTNAME env var at runtime:
+#   docker run -e APP_HOSTNAME=http://192.168.1.100 ...
+hostname: "http://192.168.1.100:5000"
+cache:
+  ttl: 3600
+  dir: "/data/home-cast/cache"
+port: 5000

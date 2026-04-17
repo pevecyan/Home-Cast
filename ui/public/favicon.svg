@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- Speaker body (mdi-speaker style) -->
+  <rect x="18" y="10" width="28" height="44" rx="4" fill="white" opacity="0.95"/>
+  <!-- Speaker cone (large) -->
+  <circle cx="32" cy="36" r="10" fill="none" stroke="url(#bg)" stroke-width="2.5"/>
+  <circle cx="32" cy="36" r="5" fill="url(#bg)"/>
+  <!-- Tweeter (small circle at top) -->
+  <circle cx="32" cy="20" r="3.5" fill="none" stroke="url(#bg)" stroke-width="2"/>
+</svg>

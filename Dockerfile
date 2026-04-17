@@ -1,21 +1,42 @@
-# Use an official Python runtime as a parent image
+# Stage 1: Build Vue UI
+FROM node:20-alpine AS ui-build
+WORKDIR /build
+COPY ui/package*.json ./
+RUN npm ci
+COPY ui/ ./
+RUN npm run build
+
+# Stage 2: Python app + nginx
 FROM python:3.12-slim
 
-# Set environment variables
-ENV FLASK_APP=app.py \
-    FLASK_ENV=production
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends nginx ffmpeg curl unzip && \
+    curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set working directory in the container
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy application files to the container
-COPY . .
-
-# Install any needed packages specified in requirements.txt
+# Install Python dependencies
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port 5000 for Flask app to listen on
-EXPOSE 5000
+# Copy application
+COPY app/ ./app/
+COPY run.py ./
+COPY config.docker.yaml ./config.yaml
 
-# Run the entrypoint script to start the server
-CMD ["python", "app.py"]
+# Copy built UI
+COPY --from=ui-build /build/dist /var/www/html
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN rm -f /etc/nginx/sites-enabled/default
+
+# Create cache and data directories
+RUN mkdir -p /app/cache /app/data
+
+EXPOSE 5050
+
+# Use --network host when running so speakers can reach this server
+# docker run --network host -e HOSTNAME=http://YOUR_LAN_IP home-cast
+CMD sh -c "python run.py & nginx -g 'daemon off;'"

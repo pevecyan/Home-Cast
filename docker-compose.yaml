@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/pevecyan/home-cast:1.0.0
+    container_name: home-cast
+    network_mode: "host"
+    environment:
+      # Set to your server's LAN IP so speakers can reach it
+      - APP_HOSTNAME=http://192.168.1.100:5050
+    volumes:
+      - /data/home-cast/cache:/data/home-cast/cache
+      - /data/home-cast/data:/app/data
+    restart: unless-stopped
