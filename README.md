@@ -13,6 +13,9 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 - **Real-time UI** — WebSocket state updates every 3 seconds
 - **Mobile-friendly** Vue 3 + PrimeVue UI
 
+<img width="1475" height="1151" alt="image" src="https://github.com/user-attachments/assets/543766eb-a5e1-45a0-b6a0-4b1c1370e7cb" />
+
+
 ## Quick Start (Docker)
 
 ```bash
