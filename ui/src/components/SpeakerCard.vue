@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import Slider from 'primevue/slider'
 import Button from 'primevue/button'
+import SpeakerPicker from './SpeakerPicker.vue'
 import type { Device, DeviceState } from '../api/devices'
 import { onImgError } from '../utils/imgFallback'
 
@@ -19,6 +20,8 @@ const emit = defineEmits<{
   cycleRepeat: [device: Device]
   setSleep: [device: Device, minutes: number]
   volumeChange: [device: Device, volume: number]
+  jumpToTrack: [device: Device, index: number]
+  transfer: [fromDevice: Device, toDevice: Device]
 }>()
 
 const volumePercent = computed({
@@ -50,6 +53,8 @@ const sleepRemaining = computed(() => {
 })
 const showSleepMenu = ref(false)
 const sleepOptions = [15, 30, 45, 60]
+const showPlaylist = ref(false)
+const showTransferPicker = ref(false)
 
 const typeIcon = computed(() =>
   props.device.type === 'sonos' ? 'mdi mdi-speaker' : 'mdi mdi-cast-audio'
@@ -91,7 +96,12 @@ const typeIcon = computed(() =>
       </div>
     </div>
 
-    <div v-if="currentTrack" class="now-playing">
+    <div
+      v-if="currentTrack"
+      class="now-playing"
+      :class="{ clickable: (queueInfo?.trackCount ?? 0) > 1 }"
+      @click="(queueInfo?.trackCount ?? 0) > 1 && (showPlaylist = !showPlaylist)"
+    >
       <img
         v-if="currentTrack.thumbnail"
         :src="currentTrack.thumbnail"
@@ -180,8 +190,48 @@ const typeIcon = computed(() =>
           :class="{ 'mode-active': repeatMode !== 'off' }"
           @click="$emit('cycleRepeat', device)"
         />
+        <Button
+          v-if="isActive && hasQueue"
+          icon="mdi mdi-cast-audio"
+          rounded
+          text
+          title="Move to another speaker"
+          @click="showTransferPicker = true"
+        />
       </div>
 
+      <SpeakerPicker
+        v-model:visible="showTransferPicker"
+        :show-play-options="false"
+        @select="({ device: target }) => { $emit('transfer', device, target); showTransferPicker = false }"
+      />
+
+      <!-- Playlist panel -->
+      <div v-if="showPlaylist && queueInfo?.tracks?.length" class="playlist-panel">
+        <div
+          v-for="(track, idx) in queueInfo.tracks"
+          :key="track.videoId + idx"
+          class="playlist-item"
+          :class="{ active: idx === queueInfo.currentIndex }"
+          @click="$emit('jumpToTrack', device, idx)"
+        >
+          <img
+            v-if="track.thumbnail"
+            :src="track.thumbnail"
+            class="pl-thumb"
+            alt=""
+            @error="onImgError"
+          />
+          <div v-else class="pl-thumb placeholder">
+            <i class="mdi mdi-music-note"></i>
+          </div>
+          <div class="pl-info">
+            <div class="pl-title">{{ track.title }}</div>
+            <div class="pl-artist">{{ track.artists?.join(', ') }}</div>
+          </div>
+          <i v-if="idx === queueInfo.currentIndex" class="mdi mdi-volume-high pl-playing-icon"></i>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -263,6 +313,15 @@ const typeIcon = computed(() =>
   margin-bottom: 12px;
   background: var(--subtle-bg);
   border-radius: 10px;
+}
+
+.now-playing.clickable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.now-playing.clickable:hover {
+  background: var(--hover-bg);
 }
 
 .np-thumb {
@@ -379,5 +438,79 @@ const typeIcon = computed(() =>
 
 .sleep-option.cancel {
   color: #ef4444;
+}
+
+.playlist-panel {
+  margin-top: 8px;
+  border-radius: 10px;
+  background: var(--subtle-bg);
+  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.playlist-item:hover {
+  background: var(--hover-bg);
+}
+
+.playlist-item.active {
+  background: var(--hover-bg);
+}
+
+.pl-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.pl-thumb.placeholder {
+  background: var(--placeholder-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--placeholder-color);
+  font-size: 1rem;
+}
+
+.pl-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pl-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-item.active .pl-title {
+  color: var(--p-primary-color, #6366f1);
+}
+
+.pl-artist {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-playing-icon {
+  font-size: 0.9rem;
+  color: var(--p-primary-color, #6366f1);
+  flex-shrink: 0;
 }
 </style>

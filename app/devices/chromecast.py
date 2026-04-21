@@ -47,16 +47,43 @@ def get_by_slug(slug):
 
 
 _cached_devices = []
+# slug -> last-seen timestamp (epoch seconds)
+_last_seen = {}
+DEVICE_EVICT_AFTER = 3600  # 1 hour
 
 
 def update_cache():
     global _cached_devices
+    now = time.time()
     devices = discover()
     for d in devices:
         ip, port = d["host"], d["port"]
         _instance_cache[(ip, port)] = get_instance(ip, port)
         _slug_cache[d["slug"]] = (ip, port)
-    _cached_devices = devices
+        _last_seen[d["slug"]] = now
+
+    # Build merged list: newly discovered + previously seen devices not yet evicted
+    seen_slugs = {d["slug"] for d in devices}
+    retained = [
+        d for d in _cached_devices
+        if d["slug"] not in seen_slugs
+        and now - _last_seen.get(d["slug"], 0) < DEVICE_EVICT_AFTER
+    ]
+    if retained:
+        logger.info(
+            "Retaining %d device(s) not seen in this scan: %s",
+            len(retained),
+            [d["slug"] for d in retained],
+        )
+    evicted = [
+        d["slug"] for d in _cached_devices
+        if d["slug"] not in seen_slugs
+        and now - _last_seen.get(d["slug"], 0) >= DEVICE_EVICT_AFTER
+    ]
+    if evicted:
+        logger.info("Evicting device(s) absent for >1 hour: %s", evicted)
+
+    _cached_devices = devices + retained
 
 
 def get_cached_devices():
@@ -76,6 +103,14 @@ def pause(cc):
 
 
 def resume(cc):
+    # If a finished queue exists for this device, restart it from the beginning
+    for slug, q in list(_queues.items()):
+        if q.cc is cc and q.tracks and cc.media_controller.status.player_state == "IDLE":
+            q._order_pos = -1
+            q.current = -1
+            q._build_play_order()
+            q._advance_and_play()
+            return {"status": "playing"}
     cc.media_controller.play()
     return {"status": "playing"}
 
@@ -240,6 +275,15 @@ class ChromecastQueue(MediaStatusListener):
             return self.tracks[self.current]
         return None
 
+    def play_track_at(self, index):
+        """Jump to a specific track by its index in the original tracks list."""
+        if not (0 <= index < len(self.tracks)):
+            return
+        self.current = index
+        if index in self._play_order:
+            self._order_pos = self._play_order.index(index)
+        self._play_current()
+
     def get_queue_info(self):
         """Return queue state for API responses."""
         track = self.get_current_track()
@@ -247,6 +291,7 @@ class ChromecastQueue(MediaStatusListener):
             "currentIndex": self.current,
             "trackCount": len(self.tracks),
             "currentTrack": track,
+            "tracks": self.tracks,
             "shuffle": self.shuffle,
             "repeat": self.repeat,
         }

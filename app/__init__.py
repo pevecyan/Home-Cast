@@ -1,6 +1,8 @@
+import json
 import logging
+from pathlib import Path
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
 
 from app.config import load_config
 from app.devices.discovery import start_cache_updater
@@ -26,6 +28,17 @@ def create_app(config_path="config.yaml"):
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+    _changelog_path = Path(__file__).parent.parent / "CHANGELOG.json"
+
+    @flask_app.route("/version")
+    def version():
+        try:
+            changelog = json.loads(_changelog_path.read_text())
+        except Exception:
+            changelog = []
+        current = changelog[0]["version"] if changelog else "0.0.0"
+        return jsonify({"version": current, "changelog": changelog})
 
     @flask_app.before_request
     def log_request():

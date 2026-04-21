@@ -14,6 +14,8 @@ import {
   setShuffle,
   setRepeat,
   setSleepTimer,
+  playTrackAt,
+  transferQueue,
   type Device,
   type DeviceState,
 } from '../api/devices'
@@ -186,6 +188,14 @@ export const useDevicesStore = defineStore('devices', () => {
     await prevTrack(device.slug, device.type)
   }
 
+  async function jumpToTrack(device: Device, index: number) {
+    await playTrackAt(device.slug, index)
+  }
+
+  async function transfer(fromDevice: Device, toDevice: Device) {
+    await transferQueue(fromDevice.slug, toDevice.slug, toDevice.type)
+  }
+
   async function toggleShuffle(device: Device) {
     const state = getState(device)
     const current = state?.queue?.shuffle ?? false
@@ -240,6 +250,8 @@ export const useDevicesStore = defineStore('devices', () => {
     changeVolume,
     next,
     prev,
+    jumpToTrack,
+    transfer,
     toggleShuffle,
     cycleRepeat,
     setSleep,

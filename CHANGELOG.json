@@ -1,0 +1,30 @@
+[
+  {
+    "version": "1.1.0",
+    "date": "2026-04-21",
+    "changes": [
+      "Playlist panel: click now-playing track to browse and jump to any song",
+      "Transfer queue to a different speaker mid-playback",
+      "Play button restarts finished playlist from the beginning",
+      "Group child players always visible when group is active for independent volume control",
+      "Speakers with active playlists shown independently, not grouped",
+      "Song prefetch on playlist/album/artist page load to reduce play delay",
+      "Chromecast discovery is now forgiving: devices retained for 1 hour if missed by mDNS",
+      "Added version info and changelog endpoint to backend and display in UI sidebar"
+    ]
+  },
+  {
+    "version": "1.0.0",
+    "date": "2026-04-17",
+    "changes": [
+      "Initial public release",
+      "Chromecast and Sonos support",
+      "YouTube Music search, playlists, albums, artists",
+      "Radio station browser with favorites",
+      "Saved playlists",
+      "Sleep timer",
+      "Dark and light mode",
+      "WebSocket real-time state updates"
+    ]
+  }
+]

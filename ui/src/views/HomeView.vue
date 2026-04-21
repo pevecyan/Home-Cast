@@ -25,15 +25,20 @@ function isActive(d: Device) {
   return s?.status === 'PLAYING' || s?.status === 'PAUSED'
 }
 
+function hasOwnPlaylist(d: Device) {
+  const s = store.getState(d)
+  return !!(s?.queue?.trackCount && s.queue.trackCount > 0)
+}
+
 // All group devices
 const groups = computed(() =>
   store.devices.filter(d => d.cast_type === 'group')
 )
 
-// Group member = audio chromecast when a group exists
+// Group member = audio chromecast when a group exists, unless it has its own active playlist
 const groupMembers = computed(() =>
   groups.value.length
-    ? store.devices.filter(d => d.cast_type === 'audio')
+    ? store.devices.filter(d => d.cast_type === 'audio' && !hasOwnPlaylist(d))
     : []
 )
 
@@ -47,9 +52,9 @@ const activeGroupMembers = computed(() =>
   groupMembers.value.filter(d => isActive(d))
 )
 
-// Non-group devices (cast, sonos, groups themselves)
+// Non-group devices (cast, sonos, groups themselves, and audio members with own playlist)
 const nonGroupDevices = computed(() =>
-  store.devices.filter(d => d.cast_type !== 'audio' || !groups.value.length)
+  store.devices.filter(d => d.cast_type !== 'audio' || !groups.value.length || hasOwnPlaylist(d))
 )
 
 const activeSpeakers = computed(() => {
@@ -62,9 +67,11 @@ const idleSpeakers = computed(() =>
   nonGroupDevices.value.filter(d => !isActive(d))
 )
 
-// Members to show for a given group (when expanded)
+// Members to show for a given group (expanded or group is active)
 function getGroupMembers(groupSlug: string) {
-  if (!expandedGroups.value.has(groupSlug)) return []
+  const group = store.devices.find(d => d.slug === groupSlug)
+  const groupActive = group ? isActive(group) : false
+  if (!expandedGroups.value.has(groupSlug) && !groupActive) return []
   return idleGroupMembers.value
 }
 
@@ -111,25 +118,7 @@ function onVolumeChange(device: Device, volume: number) {
       <!-- Active speakers -->
       <div v-if="activeSpeakers.length" class="speakers-grid active-section">
         <template v-for="device in activeSpeakers" :key="`${device.slug}:${device.type}`">
-          <SpeakerCard
-            :device="device"
-            :state="store.getState(device)"
-            @toggle-play-pause="store.togglePlayPause(device)"
-            @stop="store.stop(device)"
-            @next="store.next(device)"
-            @prev="store.prev(device)"
-            @toggle-shuffle="store.toggleShuffle(device)"
-            @cycle-repeat="store.cycleRepeat(device)"
-            @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
-            @volume-change="onVolumeChange"
-          />
-        </template>
-      </div>
-
-      <!-- Idle speakers -->
-      <div v-if="idleSpeakers.length" class="speakers-grid">
-        <template v-for="device in idleSpeakers" :key="`${device.slug}:${device.type}`">
-          <div v-if="isGroup(device)" class="group-wrapper" :class="{ collapsed: !isExpanded(device) }">
+          <div v-if="isGroup(device) && groupMembers.length" class="group-wrapper">
             <SpeakerCard
               :device="device"
               :state="store.getState(device)"
@@ -141,6 +130,64 @@ function onVolumeChange(device: Device, volume: number) {
               @cycle-repeat="store.cycleRepeat(device)"
               @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
               @volume-change="onVolumeChange"
+              @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+              @transfer="(from: Device, to: Device) => store.transfer(from, to)"
+            />
+            <!-- Always show group members when group is active -->
+            <div class="group-members">
+              <SpeakerCard
+                v-for="member in groupMembers"
+                :key="`${member.slug}:${member.type}`"
+                :device="member"
+                :state="store.getState(member)"
+                @toggle-play-pause="store.togglePlayPause(member)"
+                @stop="store.stop(member)"
+                @next="store.next(member)"
+                @prev="store.prev(member)"
+                @toggle-shuffle="store.toggleShuffle(member)"
+                @cycle-repeat="store.cycleRepeat(member)"
+                @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
+                @volume-change="onVolumeChange"
+                @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+                @transfer="(from: Device, to: Device) => store.transfer(from, to)"
+              />
+            </div>
+          </div>
+          <SpeakerCard
+            v-else
+            :device="device"
+            :state="store.getState(device)"
+            @toggle-play-pause="store.togglePlayPause(device)"
+            @stop="store.stop(device)"
+            @next="store.next(device)"
+            @prev="store.prev(device)"
+            @toggle-shuffle="store.toggleShuffle(device)"
+            @cycle-repeat="store.cycleRepeat(device)"
+            @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
+            @volume-change="onVolumeChange"
+            @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+            @transfer="(from: Device, to: Device) => store.transfer(from, to)"
+          />
+        </template>
+      </div>
+
+      <!-- Idle speakers -->
+      <div v-if="idleSpeakers.length" class="speakers-grid">
+        <template v-for="device in idleSpeakers" :key="`${device.slug}:${device.type}`">
+          <div v-if="isGroup(device)" class="group-wrapper" :class="{ collapsed: !isExpanded(device) && memberCount() > 0 }">
+            <SpeakerCard
+              :device="device"
+              :state="store.getState(device)"
+              @toggle-play-pause="store.togglePlayPause(device)"
+              @stop="store.stop(device)"
+              @next="store.next(device)"
+              @prev="store.prev(device)"
+              @toggle-shuffle="store.toggleShuffle(device)"
+              @cycle-repeat="store.cycleRepeat(device)"
+              @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
+              @volume-change="onVolumeChange"
+              @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+              @transfer="(from: Device, to: Device) => store.transfer(from, to)"
             />
             <!-- Expand/collapse button -->
             <button
@@ -152,7 +199,7 @@ function onVolumeChange(device: Device, volume: number) {
               <span>{{ memberCount() }} {{ memberCount() === 1 ? 'speaker' : 'speakers' }}</span>
             </button>
             <!-- Expanded members -->
-            <div v-if="isExpanded(device)" class="group-members">
+            <div v-if="getGroupMembers(device.slug).length" class="group-members">
               <SpeakerCard
                 v-for="member in getGroupMembers(device.slug)"
                 :key="`${member.slug}:${member.type}`"
@@ -166,6 +213,8 @@ function onVolumeChange(device: Device, volume: number) {
                 @cycle-repeat="store.cycleRepeat(member)"
                 @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
                 @volume-change="onVolumeChange"
+                @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+                @transfer="(from: Device, to: Device) => store.transfer(from, to)"
               />
             </div>
           </div>
@@ -182,6 +231,8 @@ function onVolumeChange(device: Device, volume: number) {
             @cycle-repeat="store.cycleRepeat(device)"
             @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
             @volume-change="onVolumeChange"
+            @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+            @transfer="(from: Device, to: Device) => store.transfer(from, to)"
           />
         </template>
       </div>

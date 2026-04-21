@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TrackList from '../components/TrackList.vue'
 import SpeakerPicker from '../components/SpeakerPicker.vue'
-import { getArtist, type ArtistDetail, type Track } from '../api/music'
+import { getArtist, prefetchSong, type ArtistDetail, type Track } from '../api/music'
 import { onImgError } from '../utils/imgFallback'
 import { usePlayerStore } from '../stores/player'
 import { useDevicesStore } from '../stores/devices'
@@ -30,8 +30,10 @@ devicesStore.fetchDevices()
 
 onMounted(async () => {
   const browseId = route.params.browseId as string
-  artist.value = await getArtist(browseId)
+  const a = await getArtist(browseId)
+  artist.value = a
   loading.value = false
+  a.songs.slice(0, 3).forEach(t => prefetchSong(t.videoId))
 })
 
 function onPlayTrack(track: Track) {
