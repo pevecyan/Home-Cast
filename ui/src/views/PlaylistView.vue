@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TrackList from '../components/TrackList.vue'
 import SpeakerPicker from '../components/SpeakerPicker.vue'
-import { getPlaylist, type PlaylistDetail, type Track } from '../api/music'
+import { getPlaylist, prefetchSong, type PlaylistDetail, type Track } from '../api/music'
 import { createPlaylist, listPlaylists, deletePlaylist, type SavedPlaylist } from '../api/playlists'
 import { onImgError } from '../utils/imgFallback'
 import { usePlayerStore } from '../stores/player'
@@ -79,6 +79,7 @@ onMounted(async () => {
   ])
   playlist.value = pl
   loading.value = false
+  pl.tracks.slice(0, 3).forEach(t => prefetchSong(t.videoId))
 })
 
 function onPlayTrack(track: Track) {

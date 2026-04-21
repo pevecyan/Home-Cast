@@ -8,10 +8,30 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 - **YouTube Music** — search songs, artists, albums, playlists; play with automatic queuing and background download
 - **Radio** — search via Radio Browser API, play live streams
 - **Saved playlists** — create and manage local playlists
-- **Queue** — shuffle, repeat (off / all / one), next / prev, sleep timer
+- **Queue** — shuffle, repeat (off / all / one), next / prev, sleep timer, playlist browser, transfer to another speaker
 - **Notification sound** — interrupt playback with a sound clip, then resume from the same position
 - **Real-time UI** — WebSocket state updates every 3 seconds
 - **Mobile-friendly** Vue 3 + PrimeVue UI
+
+## Changelog
+
+### v1.1.0 — 2026-04-21
+- Playlist panel: click now-playing track to browse and jump to any song
+- Transfer queue to a different speaker mid-playback
+- Play button restarts finished playlist from the beginning
+- Group child players always visible when group is active for independent volume control
+- Speakers with active playlists shown independently, not grouped
+- Song prefetch on playlist/album/artist page load to reduce play delay
+- Chromecast discovery is now forgiving: devices retained for 1 hour if missed by mDNS
+- Version info and changelog displayed in sidebar
+
+### v1.0.0 — 2026-04-17
+- Initial public release
+- Chromecast and Sonos support
+- YouTube Music search, playlists, albums, artists
+- Radio station browser with favorites
+- Saved playlists, sleep timer, dark/light mode
+- WebSocket real-time state updates
 
 ## Quick Start (Docker)
 
@@ -146,8 +166,8 @@ The Vite dev server proxies `/api/` to the Flask backend automatically.
 ## Docker Build
 
 ```bash
-docker build -t ghcr.io/pevecyan/home-cast:1.0.0 .
-docker push ghcr.io/pevecyan/home-cast:1.0.0
+docker build -t ghcr.io/pevecyan/home-cast:1.1.0 .
+docker push ghcr.io/pevecyan/home-cast:1.1.0
 ```
 
 ## Requirements

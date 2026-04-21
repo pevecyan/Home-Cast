@@ -1,6 +1,9 @@
+import logging
 import threading
 
 from flask import Blueprint, Response, request, jsonify, current_app
+
+logger = logging.getLogger(__name__)
 
 from app.music import ytmusic
 from app.music import playlist as pl
@@ -40,6 +43,30 @@ def get_playlist(playlist_id):
 def get_album(browse_id):
     result = ytmusic.get_album(browse_id)
     return jsonify(result)
+
+
+# --- Prefetch ---
+
+@music_bp.route("/prefetch", methods=["POST"])
+def prefetch():
+    """Fire-and-forget background download of a song. Returns immediately."""
+    data = request.json
+    video_id = data.get("videoId")
+    if not video_id:
+        return jsonify({"error": "videoId is required"}), 400
+    cache = get_cache()
+    if cache.get_song_path(video_id):
+        return jsonify({"status": "cached"})
+    threading.Thread(target=_prefetch_song, args=(cache, video_id), daemon=True).start()
+    return jsonify({"status": "prefetching"})
+
+
+def _prefetch_song(cache, video_id):
+    try:
+        cache.ensure_song(video_id)
+        logger.info("Prefetch complete: %s", video_id)
+    except Exception as e:
+        logger.debug("Prefetch failed for %s: %s", video_id, e)
 
 
 # --- Play ---
@@ -133,6 +160,71 @@ def play():
         "status": "playing",
         "trackCount": len(tracks),
     })
+
+
+@music_bp.route("/transfer", methods=["POST"])
+def transfer():
+    """Transfer active queue from one speaker to another, starting at current track."""
+    data = request.json
+    from_slug = data.get("fromSlug")
+    to_slug = data.get("toSlug")
+    to_type = data.get("toType", "chromecast")
+
+    if not from_slug or not to_slug:
+        return jsonify({"error": "fromSlug and toSlug are required"}), 400
+
+    # Only Chromecast queues are transferable
+    queue = chromecast.get_queue(from_slug)
+    if not queue or not queue.tracks:
+        return jsonify({"error": "No active queue on source device"}), 400
+
+    tracks = queue.tracks
+    current_index = queue.current
+    shuffle = queue.shuffle
+    repeat = queue.repeat
+
+    cache = get_cache()
+
+    # Stop source
+    cc_from = chromecast.get_by_slug(from_slug)
+    if cc_from:
+        chromecast.stop(cc_from)
+
+    # Start on target
+    if to_type == "sonos":
+        hostname = current_app.config["APP"]["hostname"]
+        m3u_content = pl.generate_m3u(tracks, hostname)
+        transfer_id = f"transfer_{to_slug}"
+        _m3u_store[transfer_id] = m3u_content
+        m3u_url = f"{hostname}/music/m3u/{transfer_id}.m3u"
+        device = sonos.get_by_slug(to_slug)
+        if not device:
+            return jsonify({"error": "Target Sonos device not found"}), 400
+        sonos.play_media(device, m3u_url)
+        if shuffle:
+            sonos.set_shuffle(device, True)
+        if repeat != "off":
+            sonos.set_repeat(device, repeat)
+    else:
+        cc_to = chromecast.get_by_slug(to_slug)
+        if not cc_to:
+            return jsonify({"error": "Target Chromecast device not found"}), 400
+        new_queue = chromecast.get_queue(to_slug, cc_to, cache)
+        new_queue.tracks = list(tracks)
+        new_queue.shuffle = shuffle
+        new_queue.repeat = repeat
+        new_queue._build_play_order()
+        # Position play order to start at current_index
+        if current_index in new_queue._play_order:
+            new_queue._order_pos = new_queue._play_order.index(current_index)
+        else:
+            new_queue._order_pos = 0
+        new_queue.current = new_queue._play_order[new_queue._order_pos]
+        new_queue._play_current()
+
+    from app.ws import broadcast_states
+    broadcast_states()
+    return jsonify({"status": "transferred", "trackCount": len(tracks)})
 
 
 # In-memory M3U store (generated playlists)

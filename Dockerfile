@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY app/ ./app/
 COPY run.py ./
+COPY CHANGELOG.json ./
 COPY config.docker.yaml ./config.yaml
 
 # Copy built UI

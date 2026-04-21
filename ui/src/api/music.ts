@@ -61,6 +61,9 @@ export const getPlaylist = (playlistId: string) =>
 export const getAlbum = (browseId: string) =>
   api.get<AlbumDetail>(`/music/album/${browseId}`).then(r => r.data)
 
+export const prefetchSong = (videoId: string) =>
+  api.post('/music/prefetch', { videoId }).catch(() => { /* best-effort */ })
+
 export const playSong = (slug: string, type: string, videoId: string, shuffle = false, repeat = 'off', track?: Partial<Track>) =>
   api.post('/music/play', { slug, type, videoId, shuffle, repeat, track }).then(r => r.data)
 

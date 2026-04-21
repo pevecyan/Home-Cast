@@ -239,6 +239,21 @@ def prev_by_slug():
         return jsonify({"status": "previous"})
 
 
+@devices_bp.route("/device/slug/play-track", methods=["POST"])
+def play_track_by_slug():
+    data = request.json
+    slug = data.get("slug")
+    index = data.get("index")
+    if index is None:
+        return jsonify({"error": "index is required"}), 400
+    queue = chromecast.get_queue(slug)
+    if not queue:
+        return jsonify({"error": "No active queue for this device"}), 400
+    queue.play_track_at(int(index))
+    broadcast_states()
+    return jsonify({"status": "playing", "index": index})
+
+
 @devices_bp.route("/device/slug/shuffle", methods=["POST"])
 def shuffle_by_slug():
     data = request.json

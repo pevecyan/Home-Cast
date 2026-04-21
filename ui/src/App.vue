@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import Dialog from 'primevue/dialog'
 import MiniPlayer from './components/MiniPlayer.vue'
 import { isDark, toggleDark } from './utils/darkMode'
 import { useDevicesStore } from './stores/devices'
 import { useRecentStore } from './stores/recent'
 import { useFavoriteRadioStore } from './stores/favoriteRadio'
+import { getVersion, type VersionInfo } from './api/version'
 
 const router = useRouter()
 const sidebarOpen = ref(false)
@@ -25,6 +27,9 @@ onMounted(async () => {
   // Load persisted data from server
   recentStore.load()
   favoriteRadioStore.load()
+
+  // Load version info eagerly so it shows in sidebar immediately
+  getVersion().then(v => { versionInfo.value = v }).catch(() => {})
 })
 
 onUnmounted(() => {
@@ -41,6 +46,16 @@ const navItems = [
 function navigate(to: string) {
   router.push(to)
   sidebarOpen.value = false
+}
+
+const versionInfo = ref<VersionInfo | null>(null)
+const showChangelog = ref(false)
+
+async function openChangelog() {
+  if (!versionInfo.value) {
+    versionInfo.value = await getVersion()
+  }
+  showChangelog.value = true
 }
 </script>
 
@@ -69,12 +84,37 @@ function navigate(to: string) {
       </nav>
 
       <div class="sidebar-footer">
+        <button class="version-btn" @click="openChangelog">
+          <i class="mdi mdi-tag-outline"></i>
+          <span>v{{ versionInfo?.version ?? '…' }}</span>
+        </button>
         <button class="sidebar-item theme-toggle" @click="toggleDark()">
           <i :class="isDark ? 'mdi mdi-weather-sunny' : 'mdi mdi-weather-night'"></i>
           <span>{{ isDark ? 'Light mode' : 'Dark mode' }}</span>
         </button>
       </div>
     </aside>
+
+    <Dialog
+      v-model:visible="showChangelog"
+      header="Changelog"
+      modal
+      :closable="true"
+      :closeOnEscape="true"
+      :style="{ width: '90vw', maxWidth: '480px' }"
+    >
+      <div v-if="versionInfo" class="changelog">
+        <div v-for="entry in versionInfo.changelog" :key="entry.version" class="changelog-entry">
+          <div class="changelog-header">
+            <span class="changelog-version">v{{ entry.version }}</span>
+            <span class="changelog-date">{{ entry.date }}</span>
+          </div>
+          <ul class="changelog-list">
+            <li v-for="(change, i) in entry.changes" :key="i">{{ change }}</li>
+          </ul>
+        </div>
+      </div>
+    </Dialog>
 
     <!-- Overlay for mobile -->
     <div class="sidebar-overlay" @click="sidebarOpen = false"></div>
@@ -183,10 +223,81 @@ function navigate(to: string) {
 
 .sidebar-footer {
   padding: 8px;
-  height: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--border-color);
+}
+
+.version-btn {
   display: flex;
   align-items: center;
-  border-top: 1px solid var(--border-color);
+  gap: 12px;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.version-btn i {
+  font-size: 1.25rem;
+  width: 24px;
+  text-align: center;
+}
+
+.version-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.changelog {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.changelog-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.changelog-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.changelog-version {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--p-primary-color, #6366f1);
+}
+
+.changelog-date {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.changelog-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.changelog-list li {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 
 /* ── Overlay ── */

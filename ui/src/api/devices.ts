@@ -23,6 +23,7 @@ export interface QueueInfo {
   currentIndex: number
   trackCount: number
   currentTrack: QueueTrack | null
+  tracks: QueueTrack[]
   shuffle: boolean
   repeat: 'off' | 'all' | 'one'
 }
@@ -86,3 +87,9 @@ export const setSleepTimer = (slug: string, type: string, minutes: number) =>
 
 export const setRepeat = (slug: string, type: string, mode: string) =>
   api.post('/device/slug/repeat', { slug, type, mode }).then(r => r.data)
+
+export const playTrackAt = (slug: string, index: number) =>
+  api.post('/device/slug/play-track', { slug, index }).then(r => r.data)
+
+export const transferQueue = (fromSlug: string, toSlug: string, toType: string) =>
+  api.post('/music/transfer', { fromSlug, toSlug, toType }).then(r => r.data)
