@@ -17,6 +17,12 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 
 ## Changelog
 
+### V1.2.0 - 2026-04-23
+- Settings dialog with theme selector (light/dark/auto) and feature toggles
+- Volume lock: lock a speaker's volume via UI or API
+- Update banner: checks GitHub for new releases and shows indicator in sidebar
+- Fixed group members list not updating correctly
+
 ### v1.1.0 — 2026-04-21
 - Playlist panel: click now-playing track to browse and jump to any song
 - Transfer queue to a different speaker mid-playback
