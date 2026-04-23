@@ -5,10 +5,12 @@ import Button from 'primevue/button'
 import SpeakerPicker from './SpeakerPicker.vue'
 import type { Device, DeviceState } from '../api/devices'
 import { onImgError } from '../utils/imgFallback'
+import { sleepEnabled, volumeLockEnabled } from '../utils/settings'
 
 const props = defineProps<{
   device: Device
   state?: DeviceState
+  volumeLocked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -20,6 +22,7 @@ const emit = defineEmits<{
   cycleRepeat: [device: Device]
   setSleep: [device: Device, minutes: number]
   volumeChange: [device: Device, volume: number]
+  toggleVolumeLock: [device: Device]
   jumpToTrack: [device: Device, index: number]
   transfer: [fromDevice: Device, toDevice: Device]
 }>()
@@ -71,7 +74,7 @@ const typeIcon = computed(() =>
           <div class="speaker-type">{{ device.type }}</div>
         </div>
       </div>
-      <div v-if="isActive" class="sleep-wrapper">
+      <div v-if="isActive && sleepEnabled" class="sleep-wrapper">
         <div class="sleep-icon-btn" :class="{ active: !!sleepTimer }" @click="showSleepMenu = !showSleepMenu">
           <i class="mdi mdi-power-sleep"></i>
           <span v-if="sleepRemaining" class="sleep-remaining">{{ sleepRemaining }}</span>
@@ -149,8 +152,16 @@ const typeIcon = computed(() =>
     <div class="speaker-controls">
       <div class="volume-row">
         <i class="mdi mdi-volume-low"></i>
-        <Slider v-model="volumePercent" :min="0" :max="100" class="volume-slider" />
+        <Slider v-model="volumePercent" :min="0" :max="100" class="volume-slider" :disabled="volumeLockEnabled && volumeLocked" />
         <i class="mdi mdi-volume-high"></i>
+        <div
+          v-if="volumeLockEnabled"
+          class="volume-lock-btn"
+          :class="{ 'mode-active': volumeLocked }"
+          @click="$emit('toggleVolumeLock', device)"
+        >
+          <i :class="volumeLocked ? 'mdi mdi-lock' : 'mdi mdi-lock-open-outline'"></i>
+        </div>
       </div>
       <div v-if="isActive" class="button-row">
         <Button
@@ -387,6 +398,18 @@ const typeIcon = computed(() =>
 .volume-row i {
   color: var(--text-secondary);
   font-size: 0.85rem;
+}
+
+.volume-lock-btn {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.volume-lock-btn.mode-active i {
+  color: var(--p-primary-color, #6366f1);
 }
 
 .volume-slider {

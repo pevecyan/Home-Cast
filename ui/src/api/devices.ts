@@ -9,6 +9,8 @@ export interface Device {
   host: string
   port: number
   cast_type?: 'audio' | 'cast' | 'group'
+  uuid?: string
+  members?: string[]  // UUIDs of member devices (only present on groups)
 }
 
 export interface QueueTrack {
@@ -93,3 +95,9 @@ export const playTrackAt = (slug: string, index: number) =>
 
 export const transferQueue = (fromSlug: string, toSlug: string, toType: string) =>
   api.post('/music/transfer', { fromSlug, toSlug, toType }).then(r => r.data)
+
+export const lockVolume = (slug: string, type: string) =>
+  api.post('/device/slug/volume/lock', { slug, type }).then(r => r.data)
+
+export const unlockVolume = (slug: string, type: string) =>
+  api.post('/device/slug/volume/unlock', { slug, type }).then(r => r.data)

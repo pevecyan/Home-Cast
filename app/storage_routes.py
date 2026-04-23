@@ -22,6 +22,18 @@ def remove_favorite(stationuuid):
     return jsonify(storage.remove_favorite(stationuuid))
 
 
+# --- Settings ---
+
+@storage_bp.route("/settings", methods=["GET"])
+def get_settings():
+    return jsonify(storage.get_settings())
+
+
+@storage_bp.route("/settings", methods=["POST"])
+def save_settings():
+    return jsonify(storage.save_settings(request.json))
+
+
 # --- Recents ---
 
 @storage_bp.route("/recents", methods=["GET"])

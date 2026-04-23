@@ -4,6 +4,8 @@ import time
 
 import pychromecast
 from pychromecast.controllers.media import MediaStatusListener
+from pychromecast.controllers.multizone import MultizoneController
+from pychromecast.controllers.receiver import CastStatusListener
 
 logger = logging.getLogger(__name__)
 
@@ -15,20 +17,79 @@ _slug_cache = {}
 _queues = {}
 
 
+def _get_group_members(host, port, uuid):
+    """Return list of member UUIDs for a group Chromecast via a direct TCP connection."""
+    cc = pychromecast.get_chromecast_from_host((host, port, uuid, None, None))
+    cc.wait()
+    mz = MultizoneController(cc.uuid)
+    cc.register_handler(mz)
+    mz.update_members()
+    # wait up to 3 seconds for the multizone status response
+    deadline = time.time() + 3
+    while not mz.members and time.time() < deadline:
+        time.sleep(0.1)
+    members = mz.members
+    cc.unregister_handler(mz)
+    cc.disconnect()
+    return members
+
+
 def discover():
     chromecasts, browser = pychromecast.get_chromecasts()
     browser.stop_discovery()
-    return [
-        {
+    devices = []
+    for cc in chromecasts:
+        info = cc.cast_info
+        device = {
             "type": "chromecast",
-            "friendly_name": cc.cast_info.friendly_name,
-            "slug": cc.cast_info.friendly_name.lower().replace(" ", "_"),
-            "host": cc.cast_info.host,
-            "port": cc.cast_info.port,
-            "cast_type": cc.cast_info.cast_type,  # "audio", "cast", "group"
+            "friendly_name": info.friendly_name,
+            "slug": info.friendly_name.lower().replace(" ", "_"),
+            "host": info.host,
+            "port": info.port,
+            "uuid": str(info.uuid),
+            "cast_type": info.cast_type,  # "audio", "cast", "group"
         }
-        for cc in chromecasts
-    ]
+        if info.cast_type == "group":
+            try:
+                device["members"] = _get_group_members(info.host, info.port, info.uuid)
+            except Exception:
+                logger.exception("Failed to get members for group %s", info.friendly_name)
+                device["members"] = []
+        devices.append(device)
+    return devices
+
+
+class _DeviceListener(CastStatusListener, MediaStatusListener):
+    """Listens to cast/media status events and enforces volume locks immediately."""
+
+    def __init__(self, slug):
+        self._slug = slug
+
+    def new_cast_status(self, status):
+        from app.devices.routes import _volume_locks
+        from app.ws import broadcast_states
+        key = f"{self._slug}:chromecast"
+        if key not in _volume_locks:
+            broadcast_states()
+            return
+        locked_vol = _volume_locks[key]
+        if abs(status.volume_level - locked_vol) > 0.01:
+            logger.info("Volume lock (event): restoring %s to %.2f (was %.2f)",
+                        self._slug, locked_vol, status.volume_level)
+            ip, port = _slug_cache.get(self._slug, (None, None))
+            if ip:
+                cc = _instance_cache.get((ip, port))
+                if cc:
+                    import threading
+                    threading.Thread(target=cc.set_volume, args=(locked_vol,), daemon=True).start()
+        broadcast_states()
+
+    def new_media_status(self, status):
+        from app.ws import broadcast_states
+        broadcast_states()
+
+    def load_media_failed(self, queue_item_id, error_code):
+        pass
 
 
 def get_instance(ip, port):
@@ -36,6 +97,12 @@ def get_instance(ip, port):
         cc = pychromecast.get_chromecast_from_host((ip, port, None, None, None))
         cc.wait()
         _instance_cache[(ip, port)] = cc
+        # Find slug for this device to pass to the listener
+        slug = next((s for s, addr in _slug_cache.items() if addr == (ip, port)), None)
+        if slug:
+            listener = _DeviceListener(slug)
+            cc.register_status_listener(listener)
+            cc.media_controller.register_status_listener(listener)
     return _instance_cache[(ip, port)]
 
 
@@ -58,8 +125,8 @@ def update_cache():
     devices = discover()
     for d in devices:
         ip, port = d["host"], d["port"]
-        _instance_cache[(ip, port)] = get_instance(ip, port)
         _slug_cache[d["slug"]] = (ip, port)
+        _instance_cache[(ip, port)] = get_instance(ip, port)
         _last_seen[d["slug"]] = now
 
     # Build merged list: newly discovered + previously seen devices not yet evicted

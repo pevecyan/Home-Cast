@@ -1,20 +1,21 @@
 import { ref, watchEffect } from 'vue'
+import { themeMode } from './settings'
 
-const STORAGE_KEY = 'home-cast-dark-mode'
+const systemDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
 
-function getInitial(): boolean {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored !== null) return stored === 'true'
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-}
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+  systemDark.value = e.matches
+})
 
-export const isDark = ref(getInitial())
+export const isDark = ref(false)
 
 watchEffect(() => {
+  if (themeMode.value === 'dark') isDark.value = true
+  else if (themeMode.value === 'light') isDark.value = false
+  else isDark.value = systemDark.value
   document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem(STORAGE_KEY, String(isDark.value))
 })
 
 export function toggleDark() {
-  isDark.value = !isDark.value
+  themeMode.value = isDark.value ? 'light' : 'dark'
 }

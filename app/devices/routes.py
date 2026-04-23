@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 # Sleep timers: "slug:type" -> { timer: Timer, ends_at: str (ISO) }
 _sleep_timers = {}
 
+# Volume locks: "slug:type" -> locked volume (0.0-1.0), or absent if not locked
+_volume_locks: dict[str, float] = {}
+
 
 def _stop_device_for_sleep(slug, device_type):
     """Called by sleep timer to stop the device."""
@@ -180,7 +183,11 @@ def volume_by_slug():
 @devices_bp.route("/device/slug/volume/set", methods=["POST"])
 def set_volume_by_slug():
     data = request.json
-    device, dtype = _get_device(data.get("slug"), data.get("type", "chromecast"))
+    slug = data.get("slug")
+    dtype = data.get("type", "chromecast")
+    if f"{slug}:{dtype}" in _volume_locks:
+        return jsonify({"error": "volume locked"}), 423
+    device, dtype = _get_device(slug, dtype)
     if not device:
         return jsonify({"error": "Device not found"}), 400
     result = _device_action(device, dtype, "set_volume", volume=data.get("volume"))
@@ -191,10 +198,37 @@ def set_volume_by_slug():
 @devices_bp.route("/device/slug/volume/delta", methods=["POST"])
 def volume_delta_by_slug():
     data = request.json
-    device, dtype = _get_device(data.get("slug"), data.get("type", "chromecast"))
+    slug = data.get("slug")
+    dtype = data.get("type", "chromecast")
+    if f"{slug}:{dtype}" in _volume_locks:
+        return jsonify({"error": "volume locked"}), 423
+    device, dtype = _get_device(slug, dtype)
     if not device:
         return jsonify({"error": "Device not found"}), 400
     return jsonify(_device_action(device, dtype, "adjust_volume", delta=data.get("delta")))
+
+
+@devices_bp.route("/device/slug/volume/lock", methods=["POST"])
+def lock_volume():
+    data = request.json
+    slug = data.get("slug")
+    dtype = data.get("type", "chromecast")
+    device, dtype = _get_device(slug, dtype)
+    if not device:
+        return jsonify({"error": "Device not found"}), 400
+    # Snapshot current volume as the lock target
+    state = _device_action(device, dtype, "get_volume")
+    _volume_locks[f"{slug}:{dtype}"] = float(state["volume"])
+    return jsonify({"locked": True, "volume": state["volume"]})
+
+
+@devices_bp.route("/device/slug/volume/unlock", methods=["POST"])
+def unlock_volume():
+    data = request.json
+    slug = data.get("slug")
+    dtype = data.get("type", "chromecast")
+    _volume_locks.pop(f"{slug}:{dtype}", None)
+    return jsonify({"locked": False})
 
 
 @devices_bp.route("/device/slug/next", methods=["POST"])

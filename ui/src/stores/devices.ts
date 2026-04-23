@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { volumeLockEnabled } from '../utils/settings'
 import { io, type Socket } from 'socket.io-client'
 import {
   getDevices,
@@ -16,6 +17,8 @@ import {
   setSleepTimer,
   playTrackAt,
   transferQueue,
+  lockVolume,
+  unlockVolume,
   type Device,
   type DeviceState,
 } from '../api/devices'
@@ -27,6 +30,7 @@ export const useDevicesStore = defineStore('devices', () => {
   const states = ref<Record<string, DeviceState>>({})
   const loading = ref(false)
   const volumeLocks: Record<string, number> = {}
+  const volumeLocked = ref<Record<string, boolean>>({})
   const wsConnected = ref(false)
 
   let socket: Socket | null = null
@@ -173,12 +177,39 @@ export const useDevicesStore = defineStore('devices', () => {
 
   async function changeVolume(device: Device, volume: number) {
     const key = `${device.slug}:${device.type}`
+    if (volumeLocked.value[key]) return
     volumeLocks[key] = Date.now() + VOLUME_LOCK_MS
     if (states.value[key]) {
       states.value[key] = { ...states.value[key], volume }
     }
     await setVolume(device.slug, device.type, volume)
   }
+
+  async function toggleVolumeLock(device: Device) {
+    const key = `${device.slug}:${device.type}`
+    if (volumeLocked.value[key]) {
+      await unlockVolume(device.slug, device.type)
+      volumeLocked.value = { ...volumeLocked.value, [key]: false }
+    } else {
+      await lockVolume(device.slug, device.type)
+      volumeLocked.value = { ...volumeLocked.value, [key]: true }
+    }
+  }
+
+  function isVolumeLocked(device: Device) {
+    return volumeLocked.value[`${device.slug}:${device.type}`] ?? false
+  }
+
+  // When volume lock feature is disabled, unlock all currently locked devices
+  watch(volumeLockEnabled, async (enabled) => {
+    if (enabled) return
+    const locked = Object.entries(volumeLocked.value).filter(([, v]) => v)
+    for (const [key] of locked) {
+      const [slug, type] = key.split(':')
+      await unlockVolume(slug, type)
+    }
+    volumeLocked.value = {}
+  })
 
   async function next(device: Device) {
     await nextTrack(device.slug, device.type)
@@ -248,6 +279,8 @@ export const useDevicesStore = defineStore('devices', () => {
     togglePlayPause,
     stop,
     changeVolume,
+    toggleVolumeLock,
+    isVolumeLocked,
     next,
     prev,
     jumpToTrack,

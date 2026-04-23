@@ -10,8 +10,11 @@ DATA_DIR = Path("data")
 
 FAVORITES_FILE = DATA_DIR / "favorite_radios.json"
 RECENTS_FILE = DATA_DIR / "recents.json"
+SETTINGS_FILE = DATA_DIR / "settings.json"
 
 MAX_RECENTS = 12
+
+_SETTINGS_DEFAULTS = {"sleepEnabled": True, "volumeLockEnabled": True}
 
 
 def _ensure_dir():
@@ -50,6 +53,24 @@ def remove_favorite(stationuuid):
     favorites = [s for s in get_favorites() if s["stationuuid"] != stationuuid]
     _save(FAVORITES_FILE, favorites)
     return favorites
+
+
+# --- Settings ---
+
+def get_settings():
+    if not SETTINGS_FILE.exists():
+        return dict(_SETTINGS_DEFAULTS)
+    with open(SETTINGS_FILE) as f:
+        return {**_SETTINGS_DEFAULTS, **json.load(f)}
+
+
+def save_settings(data):
+    allowed = set(_SETTINGS_DEFAULTS.keys())
+    merged = {**get_settings(), **{k: v for k, v in data.items() if k in allowed}}
+    _ensure_dir()
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(merged, f, indent=2)
+    return merged
 
 
 # --- Recents ---

@@ -1,13 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Dialog from 'primevue/dialog'
 import MiniPlayer from './components/MiniPlayer.vue'
-import { isDark, toggleDark } from './utils/darkMode'
+import SettingsDialog from './components/SettingsDialog.vue'
 import { useDevicesStore } from './stores/devices'
 import { useRecentStore } from './stores/recent'
 import { useFavoriteRadioStore } from './stores/favoriteRadio'
-import { getVersion, type VersionInfo } from './api/version'
+import { getVersion, getLatestGitHubVersion, type VersionInfo } from './api/version'
+import { loadServerSettings } from './utils/settings'
+
+// Initialise dark mode reactivity (side-effectful import)
+import './utils/darkMode'
+
+const showSettings = ref(false)
 
 const router = useRouter()
 const sidebarOpen = ref(false)
@@ -27,9 +33,11 @@ onMounted(async () => {
   // Load persisted data from server
   recentStore.load()
   favoriteRadioStore.load()
+  loadServerSettings()
 
   // Load version info eagerly so it shows in sidebar immediately
   getVersion().then(v => { versionInfo.value = v }).catch(() => {})
+  getLatestGitHubVersion().then(v => { latestVersion.value = v }).catch(() => {})
 })
 
 onUnmounted(() => {
@@ -50,6 +58,12 @@ function navigate(to: string) {
 
 const versionInfo = ref<VersionInfo | null>(null)
 const showChangelog = ref(false)
+const latestVersion = ref<string | null>(null)
+
+const updateAvailable = computed(() => {
+  if (!versionInfo.value || !latestVersion.value) return false
+  return versionInfo.value.version !== latestVersion.value
+})
 
 async function openChangelog() {
   if (!versionInfo.value) {
@@ -87,13 +101,16 @@ async function openChangelog() {
         <button class="version-btn" @click="openChangelog">
           <i class="mdi mdi-tag-outline"></i>
           <span>v{{ versionInfo?.version ?? '…' }}</span>
+          <span v-if="updateAvailable" class="update-dot" title="New version available"></span>
         </button>
-        <button class="sidebar-item theme-toggle" @click="toggleDark()">
-          <i :class="isDark ? 'mdi mdi-weather-sunny' : 'mdi mdi-weather-night'"></i>
-          <span>{{ isDark ? 'Light mode' : 'Dark mode' }}</span>
+        <button class="sidebar-item" @click="showSettings = true">
+          <i class="mdi mdi-cog-outline"></i>
+          <span>Settings</span>
         </button>
       </div>
     </aside>
+
+    <SettingsDialog v-model:visible="showSettings" />
 
     <Dialog
       v-model:visible="showChangelog"
@@ -104,6 +121,10 @@ async function openChangelog() {
       :style="{ width: '90vw', maxWidth: '480px' }"
     >
       <div v-if="versionInfo" class="changelog">
+        <div v-if="updateAvailable" class="update-banner">
+          <i class="mdi mdi-arrow-up-circle-outline"></i>
+          <span>Version <strong>v{{ latestVersion }}</strong> is available on GitHub</span>
+        </div>
         <div v-for="entry in versionInfo.changelog" :key="entry.version" class="changelog-entry">
           <div class="changelog-header">
             <span class="changelog-version">v{{ entry.version }}</span>
@@ -255,6 +276,33 @@ async function openChangelog() {
 .version-btn:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
+}
+
+.update-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 40%, transparent);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.update-banner i {
+  font-size: 1.1rem;
+  color: #f59e0b;
+  flex-shrink: 0;
 }
 
 .changelog {
