@@ -21,7 +21,7 @@ const trackPosition = document.getElementById('track-position');
 const queueList = document.getElementById('queue-list');
 
 // --- State ---
-let queueItems = [];       // MediaQueueItem array as loaded
+let queueItems = [];
 let currentItemId = null;
 let progressInterval = null;
 
@@ -88,7 +88,6 @@ function renderQueue(items, currentId) {
     queueList.appendChild(row);
 
     if (isCurrent) {
-      // scroll current item into view after render
       setTimeout(() => row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
     }
   });
@@ -107,10 +106,16 @@ function updateTrackInfo(mediaStatus) {
   currentItemId = mediaStatus.currentItemId;
   renderQueue(queueItems, currentItemId);
 
-  // track position label e.g. "3 / 12"
   if (queueItems.length > 0) {
     const idx = queueItems.findIndex(i => i.itemId === currentItemId);
     trackPosition.textContent = idx >= 0 ? `${idx + 1} / ${queueItems.length}` : '';
+  }
+}
+
+function syncQueueItems() {
+  const mediaInfo = playerManager.getMediaInformation();
+  if (mediaInfo && mediaInfo.queueData && mediaInfo.queueData.items) {
+    queueItems = mediaInfo.queueData.items;
   }
 }
 
@@ -159,7 +164,6 @@ playerManager.addEventListener(cast.framework.events.EventType.MEDIA_STATUS, eve
     if (reason === cast.framework.messages.IdleReason.FINISHED ||
         reason === cast.framework.messages.IdleReason.CANCELLED ||
         reason === cast.framework.messages.IdleReason.ERROR) {
-      // Only go idle if not mid-notification
       if (!notifActive) {
         appEl.classList.remove('hidden');
         showScreen('idle');
@@ -170,23 +174,10 @@ playerManager.addEventListener(cast.framework.events.EventType.MEDIA_STATUS, eve
   }
 });
 
-// Capture queue items when a LOAD completes
-playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
-  const mediaInfo = playerManager.getMediaInformation();
-  if (mediaInfo && mediaInfo.queueData && mediaInfo.queueData.items) {
-    queueItems = mediaInfo.queueData.items;
-  }
-});
-
-// Update current item highlight when track changes within the queue
-playerManager.addEventListener(cast.framework.events.EventType.QUEUE_ITEM_ENDED, () => {
-  const status = playerManager.getPlayerData();
-  if (status) {
-    currentItemId = status.currentItemId;
-    renderQueue(queueItems, currentItemId);
-    const idx = queueItems.findIndex(i => i.itemId === currentItemId);
-    trackPosition.textContent = idx >= 0 ? `${idx + 1} / ${queueItems.length}` : '';
-  }
+// Capture queue items after a queue loads or changes
+playerManager.addEventListener(cast.framework.events.EventType.QUEUE_CHANGE, () => {
+  syncQueueItems();
+  _broadcastQueueState();
 });
 
 // --- Custom message handler ---
@@ -208,9 +199,6 @@ context.addCustomMessageListener(NAMESPACE, event => {
     }
 
     case 'RELOAD_QUEUE': {
-      // Sent by Python when shuffle is toggled — replaces the queue with re-ordered items
-      // msg.items: array of { url, mediaType, metadata, itemId }
-      // msg.startIndex: index in the new items array to start from
       if (!msg.items || msg.items.length === 0) break;
       const loadRequest = new cast.framework.messages.LoadRequestData();
       loadRequest.queueData = new cast.framework.messages.QueueData();
@@ -238,7 +226,6 @@ context.addCustomMessageListener(NAMESPACE, event => {
 
       playerManager.pause();
 
-      // Play the notification as a one-shot media item
       const notifRequest = new cast.framework.messages.LoadRequestData();
       const notifMedia = new cast.framework.messages.MediaInformation();
       notifMedia.contentId = msg.url;
@@ -247,7 +234,6 @@ context.addCustomMessageListener(NAMESPACE, event => {
       notifRequest.media = notifMedia;
       notifRequest.autoplay = true;
 
-      // Listen for notif end then restore queue
       const onNotifStatus = (evt) => {
         const s = evt.mediaStatus;
         if (!s) return;
@@ -273,21 +259,10 @@ context.addCustomMessageListener(NAMESPACE, event => {
 
 function _resumeAfterNotification() {
   if (notifSavedItemId == null || queueItems.length === 0) return;
-  const jumpRequest = new cast.framework.messages.QueueJumpRequest();
-  jumpRequest.currentItemId = notifSavedItemId;
-  jumpRequest.currentTime = notifSavedTime || 0;
   playerManager.queueJumpToItem(notifSavedItemId, notifSavedTime || 0);
   notifSavedItemId = null;
   notifSavedTime = null;
 }
-
-// Broadcast queue state to Python backend on every track change
-playerManager.addEventListener(cast.framework.events.EventType.QUEUE_ITEM_ENDED, () => {
-  _broadcastQueueState();
-});
-playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
-  _broadcastQueueState();
-});
 
 function _broadcastQueueState() {
   const playerData = playerManager.getPlayerData();
