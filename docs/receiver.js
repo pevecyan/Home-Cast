@@ -141,7 +141,7 @@ function stopProgressTimer() {
 
 // --- CAF event hooks ---
 
-playerManager.addEventListener(cast.framework.events.EventType.MEDIA_STATUS, event => {
+playerManager.addEventListener('MEDIA_STATUS', event => {
   const status = event.mediaStatus;
   if (!status) return;
 
@@ -175,7 +175,7 @@ playerManager.addEventListener(cast.framework.events.EventType.MEDIA_STATUS, eve
 });
 
 // Capture queue items after a queue loads or changes
-playerManager.addEventListener(cast.framework.events.EventType.QUEUE_CHANGE, () => {
+playerManager.addEventListener('QUEUE_CHANGE', () => {
   syncQueueItems();
   _broadcastQueueState();
 });
@@ -241,12 +241,12 @@ context.addCustomMessageListener(NAMESPACE, event => {
             (s.idleReason === cast.framework.messages.IdleReason.FINISHED ||
              s.idleReason === cast.framework.messages.IdleReason.ERROR ||
              s.idleReason === cast.framework.messages.IdleReason.CANCELLED)) {
-          playerManager.removeEventListener(cast.framework.events.EventType.MEDIA_STATUS, onNotifStatus);
+          playerManager.removeEventListener('MEDIA_STATUS', onNotifStatus);
           notifActive = false;
           _resumeAfterNotification();
         }
       };
-      playerManager.addEventListener(cast.framework.events.EventType.MEDIA_STATUS, onNotifStatus);
+      playerManager.addEventListener('MEDIA_STATUS', onNotifStatus);
       playerManager.load(notifRequest);
       break;
     }
