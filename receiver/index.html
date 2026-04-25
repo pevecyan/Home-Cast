@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>home-cast</title>
+  <link rel="stylesheet" href="receiver.css" />
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+</head>
+<body>
+  <cast-media-player id="player"></cast-media-player>
+
+  <div id="app" class="hidden">
+    <!-- Idle screen -->
+    <div id="idle-screen" class="screen">
+      <div class="idle-logo">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="32" cy="32" r="30" stroke="#6366f1" stroke-width="3"/>
+          <path d="M22 20 L22 44 L46 32 Z" fill="#6366f1"/>
+        </svg>
+      </div>
+      <p class="idle-label">home-cast</p>
+      <p class="idle-sub">Ready to cast</p>
+    </div>
+
+    <!-- Now-playing screen -->
+    <div id="playing-screen" class="screen hidden">
+      <div class="now-playing">
+        <!-- Left: album art + track info + progress -->
+        <div class="now-playing-left">
+          <div class="album-art-wrap">
+            <img id="album-art" src="" alt="" />
+            <div id="album-art-placeholder" class="album-art-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="4" fill="#6366f1" opacity="0.6"/>
+                <circle cx="12" cy="12" r="9" stroke="#6366f1" stroke-width="1.5" opacity="0.3"/>
+              </svg>
+            </div>
+          </div>
+          <div class="track-info">
+            <div id="track-title" class="track-title"></div>
+            <div id="track-artist" class="track-artist"></div>
+            <div id="track-album" class="track-album"></div>
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-bar">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div class="progress-times">
+              <span id="time-current">0:00</span>
+              <span id="track-position" class="track-position"></span>
+              <span id="time-total">0:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: queue list -->
+        <div class="now-playing-right">
+          <div class="queue-header">Up next</div>
+          <div id="queue-list" class="queue-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="receiver.js"></script>
+</body>
+</html>
