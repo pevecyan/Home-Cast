@@ -150,6 +150,7 @@ playerManager.addEventListener('MEDIA_STATUS', event => {
   if (state === cast.framework.messages.PlayerState.PLAYING ||
       state === cast.framework.messages.PlayerState.BUFFERING ||
       state === cast.framework.messages.PlayerState.PAUSED) {
+    syncQueueItems();
     appEl.classList.remove('hidden');
     showScreen('playing');
     updateTrackInfo(status);
@@ -174,11 +175,6 @@ playerManager.addEventListener('MEDIA_STATUS', event => {
   }
 });
 
-// Capture queue items after a queue loads or changes
-playerManager.addEventListener('QUEUE_CHANGE', () => {
-  syncQueueItems();
-  _broadcastQueueState();
-});
 
 // --- Custom message handler ---
 
@@ -264,17 +260,6 @@ function _resumeAfterNotification() {
   notifSavedTime = null;
 }
 
-function _broadcastQueueState() {
-  const playerData = playerManager.getPlayerData();
-  const curId = playerData ? playerData.currentItemId : null;
-  const idx = queueItems.findIndex(i => i.itemId === curId);
-  context.sendCustomMessage(NAMESPACE, undefined, {
-    type: 'QUEUE_STATE',
-    currentIndex: idx,
-    currentItemId: curId,
-    itemIds: queueItems.map(i => i.itemId),
-  });
-}
 
 // --- Start ---
 context.start({
