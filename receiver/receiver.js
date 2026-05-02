@@ -24,11 +24,16 @@ const queueList = document.getElementById('queue-list');
 let queueItems = [];
 let currentItemId = null;
 let progressInterval = null;
+let currentRepeatMode = cast.framework.messages.RepeatMode.OFF;
 
 // Notification state
-let notifSavedItemId = null;
-let notifSavedTime = null;
-let notifActive = false;
+let stateBeforeNotification = {
+  itemId: null,
+  time: null,
+  queue: [],
+  active: false,
+  state: null,
+};
 
 // --- Helpers ---
 
@@ -113,19 +118,19 @@ function updateTrackInfo(mediaStatus) {
 }
 
 function syncQueueItems() {
-  const mediaInfo = playerManager.getMediaInformation();
-  if (mediaInfo && mediaInfo.queueData && mediaInfo.queueData.items) {
-    queueItems = mediaInfo.queueData.items;
+  const items = playerManager.getQueueManager().getItems();
+  if (items && items.length > 0) {
+    queueItems = items;
   }
+  console.log('[homecast] queue items synced:', queueItems);
 }
 
 function startProgressTimer() {
   if (progressInterval) clearInterval(progressInterval);
   progressInterval = setInterval(() => {
-    const status = playerManager.getPlayerData();
-    if (!status) return;
-    const cur = status.currentTime || 0;
-    const dur = (status.media && status.media.duration) || 0;
+    const cur = playerManager.getCurrentTimeSec() || 0;
+    const mediaInfo = playerManager.getMediaInformation();
+    const dur = (mediaInfo && mediaInfo.duration) || 0;
     timeCurrent.textContent = formatTime(cur);
     timeTotal.textContent = formatTime(dur);
     progressFill.style.width = dur > 0 ? `${(cur / dur) * 100}%` : '0%';
@@ -139,6 +144,18 @@ function stopProgressTimer() {
   }
 }
 
+function broadcastState() {
+  const senders = context.getSenders();
+  if (!senders.length) return;
+  const msg = {
+    type: 'STATE',
+    queue: playerManager.getQueueManager().getItems() || [],
+    currentItemId,
+    repeatMode: currentRepeatMode,
+  };
+  senders.forEach(sender => context.sendCustomMessage(NAMESPACE, sender.id, msg));
+}
+
 // --- CAF event hooks ---
 
 playerManager.addEventListener('MEDIA_STATUS', event => {
@@ -146,6 +163,10 @@ playerManager.addEventListener('MEDIA_STATUS', event => {
   if (!status) return;
 
   const state = status.playerState;
+
+  if (status.repeatMode != null) {
+    currentRepeatMode = status.repeatMode;
+  }
 
   if (state === cast.framework.messages.PlayerState.PLAYING ||
       state === cast.framework.messages.PlayerState.BUFFERING ||
@@ -159,17 +180,19 @@ playerManager.addEventListener('MEDIA_STATUS', event => {
     } else {
       stopProgressTimer();
     }
+    broadcastState();
   } else if (state === cast.framework.messages.PlayerState.IDLE) {
     stopProgressTimer();
     const reason = status.idleReason;
     if (reason === cast.framework.messages.IdleReason.FINISHED ||
         reason === cast.framework.messages.IdleReason.CANCELLED ||
         reason === cast.framework.messages.IdleReason.ERROR) {
-      if (!notifActive) {
+      if (!stateBeforeNotification.active) {
         appEl.classList.remove('hidden');
         showScreen('idle');
         queueItems = [];
         currentItemId = null;
+        broadcastState();
       }
     }
   }
@@ -180,17 +203,52 @@ playerManager.addEventListener('MEDIA_STATUS', event => {
 
 context.addCustomMessageListener(NAMESPACE, event => {
   const msg = event.data;
+  console.log('[homecast] message received:', JSON.stringify(msg));
   if (!msg || !msg.type) return;
 
   switch (msg.type) {
     case 'SET_REPEAT': {
       const modeMap = {
-        'off': cast.framework.messages.RepeatMode.OFF,
-        'all': cast.framework.messages.RepeatMode.ALL,
-        'one': cast.framework.messages.RepeatMode.SINGLE,
+        'off': cast.framework.messages.RepeatMode.REPEAT_OFF,
+        'all': cast.framework.messages.RepeatMode.REPEAT_ALL,
+        'one': cast.framework.messages.RepeatMode.REPEAT_SINGLE,
       };
-      const mode = modeMap[msg.mode] || cast.framework.messages.RepeatMode.OFF;
-      playerManager.setRepeatMode(mode);
+      const mode = modeMap[msg.mode] || cast.framework.messages.RepeatMode.REPEAT_OFF;
+      currentRepeatMode = mode;
+      if (queueItems.length > 0) {
+        const reloadRequest = new cast.framework.messages.LoadRequestData();
+        reloadRequest.queueData = new cast.framework.messages.QueueData();
+        reloadRequest.queueData.items = queueItems.map(i => {
+          const qi = new cast.framework.messages.QueueItem();
+          qi.media = i.media;
+          return qi;
+        });
+        reloadRequest.queueData.startIndex = queueItems.findIndex(i => i.itemId === currentItemId);
+        reloadRequest.queueData.repeatMode = mode;
+        reloadRequest.currentTime = playerManager.getCurrentTimeSec() || 0;
+        reloadRequest.autoplay = playerManager.getPlayerState() === cast.framework.messages.PlayerState.PLAYING;
+        playerManager.load(reloadRequest);
+      }
+      break;
+    }
+
+    case 'SKIP_TO_ITEM': {
+      const idx = msg.index;
+      if (typeof idx !== 'number' || queueItems.length === 0) break;
+      const target = queueItems[idx];
+      if (!target) break;
+      const skipRequest = new cast.framework.messages.LoadRequestData();
+      skipRequest.queueData = new cast.framework.messages.QueueData();
+      skipRequest.queueData.items = queueItems.map(i => {
+        const qi = new cast.framework.messages.QueueItem();
+        qi.media = i.media;
+        return qi;
+      });
+      skipRequest.queueData.startIndex = idx;
+      skipRequest.queueData.repeatMode = currentRepeatMode;
+      skipRequest.currentTime = 0;
+      skipRequest.autoplay = true;
+      playerManager.load(skipRequest);
       break;
     }
 
@@ -208,17 +266,27 @@ context.addCustomMessageListener(NAMESPACE, event => {
         return qi;
       });
       loadRequest.queueData.startIndex = msg.startIndex || 0;
-      loadRequest.queueData.repeatMode = playerManager.getRepeatMode();
+      if (msg.repeatMode != null) {
+        const modeMap = {
+          'OFF': cast.framework.messages.RepeatMode.REPEAT_OFF,
+          'ALL': cast.framework.messages.RepeatMode.REPEAT_ALL,
+          'SINGLE': cast.framework.messages.RepeatMode.REPEAT_SINGLE,
+        };
+        currentRepeatMode = modeMap[msg.repeatMode] ?? cast.framework.messages.RepeatMode.REPEAT_OFF;
+      }
+      loadRequest.queueData.repeatMode = currentRepeatMode;
+      loadRequest.autoplay = true;
       playerManager.load(loadRequest);
       break;
     }
 
     case 'NOTIFICATION': {
       if (!msg.url) break;
-      notifActive = true;
-      const playerData = playerManager.getPlayerData();
-      notifSavedItemId = playerData ? playerData.currentItemId : null;
-      notifSavedTime = playerData ? playerData.currentTime : null;
+      stateBeforeNotification.active = true;
+      stateBeforeNotification.itemId = currentItemId;
+      stateBeforeNotification.time = playerManager.getCurrentTimeSec() || null;
+      stateBeforeNotification.queue = queueItems.slice();
+      stateBeforeNotification.state = playerManager.getPlayerState();
 
       playerManager.pause();
 
@@ -238,12 +306,17 @@ context.addCustomMessageListener(NAMESPACE, event => {
              s.idleReason === cast.framework.messages.IdleReason.ERROR ||
              s.idleReason === cast.framework.messages.IdleReason.CANCELLED)) {
           playerManager.removeEventListener('MEDIA_STATUS', onNotifStatus);
-          notifActive = false;
+          stateBeforeNotification.active = false;
           _resumeAfterNotification();
         }
       };
       playerManager.addEventListener('MEDIA_STATUS', onNotifStatus);
       playerManager.load(notifRequest);
+      break;
+    }
+
+    case 'GET_STATE': {
+      broadcastState();
       break;
     }
 
@@ -254,10 +327,22 @@ context.addCustomMessageListener(NAMESPACE, event => {
 });
 
 function _resumeAfterNotification() {
-  if (notifSavedItemId == null || queueItems.length === 0) return;
-  playerManager.queueJumpToItem(notifSavedItemId, notifSavedTime || 0);
-  notifSavedItemId = null;
-  notifSavedTime = null;
+  const { itemId, time, queue } = stateBeforeNotification;
+  if (itemId == null || queue.length === 0) return;
+  const startIndex = queue.findIndex(i => i.itemId === itemId);
+  const resumeRequest = new cast.framework.messages.LoadRequestData();
+  resumeRequest.queueData = new cast.framework.messages.QueueData();
+  resumeRequest.queueData.items = queue.map(i => {
+    const qi = new cast.framework.messages.QueueItem();
+    qi.media = i.media;
+    return qi;
+  });
+  resumeRequest.queueData.startIndex = startIndex >= 0 ? startIndex : 0;
+  resumeRequest.queueData.repeatMode = currentRepeatMode;
+  resumeRequest.currentTime = time || 0;
+  resumeRequest.autoplay = stateBeforeNotification.state === cast.framework.messages.PlayerState.PLAYING;
+  playerManager.load(resumeRequest);
+  stateBeforeNotification = { itemId: null, time: null, queue: [], active: false, state: null };
 }
 
 
