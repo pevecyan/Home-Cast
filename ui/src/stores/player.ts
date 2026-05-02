@@ -55,11 +55,11 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  async function playSaved(playlistId: string, device: Device, meta?: { title?: string }) {
+  async function playSaved(playlistId: string, device: Device, opts: PlayOpts = {}, meta?: { title?: string }) {
     isLoading.value = true
     currentDevice.value = device
     try {
-      await playSavedPlaylist(playlistId, device.slug, device.type)
+      await playSavedPlaylist(playlistId, device.slug, device.type, opts.shuffle, opts.repeat)
       isPlaying.value = true
       if (meta?.title) {
         useRecentStore().add({

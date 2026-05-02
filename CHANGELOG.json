@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.3.0-preview",
+    "date": "2026-05-02",
+    "changes": [
+      "Custom Chromecast Receiver: queue is now managed natively on the device via Google Cast Application Framework v3",
+      "Google Home, voice commands, and physical remotes can now control next/prev/pause",
+      "Receiver displays album art, track info, progress bar, and upcoming queue on the TV screen",
+      "New config option cast_app_id to specify your registered custom receiver app",
+      "Removed shuffle toggle (shuffle is pre-shuffle only — reloads queue in new order)",
+      "Notification sounds handled by the receiver (no more Python-side pause/resume logic)",
+      "Queue state restored from receiver on reconnect via custom message namespace",
+      "Simplified backend: Python sends queue once, CAF handles all advancement"
+    ]
+  },
+  {
     "version": "1.2.0",
     "date": "2026-04-23",
     "changes": [

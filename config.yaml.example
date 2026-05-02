@@ -7,6 +7,10 @@ hostname: "http://192.168.1.100:5000"
 # Port for the Flask backend
 port: 5000
 
+# Google Cast App ID for the custom receiver (register at cast.google.com/publish)
+# Leave empty to use the default Chromecast receiver
+cast_app_id: ""
+
 cache:
   # How long to keep downloaded audio files (seconds)
   ttl: 3600

@@ -53,7 +53,7 @@ function onPlay(id: string) {
 
 async function onSelectSpeaker(opts: PlayOptions) {
   if (pendingPlaylistId.value) {
-    await player.playSaved(pendingPlaylistId.value, opts.device)
+    await player.playSaved(pendingPlaylistId.value, opts.device, { shuffle: opts.shuffle, repeat: opts.repeat })
     pendingPlaylistId.value = null
   }
 }

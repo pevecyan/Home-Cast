@@ -26,7 +26,6 @@ export interface QueueInfo {
   trackCount: number
   currentTrack: QueueTrack | null
   tracks: QueueTrack[]
-  shuffle: boolean
   repeat: 'off' | 'all' | 'one'
 }
 
@@ -81,8 +80,6 @@ export const nextTrack = (slug: string, type: string) =>
 export const prevTrack = (slug: string, type: string) =>
   api.post('/device/slug/prev', { slug, type }).then(r => r.data)
 
-export const setShuffle = (slug: string, type: string, enabled: boolean) =>
-  api.post('/device/slug/shuffle', { slug, type, enabled }).then(r => r.data)
 
 export const setSleepTimer = (slug: string, type: string, minutes: number) =>
   api.post('/device/slug/sleep', { slug, type, minutes }).then(r => r.data)

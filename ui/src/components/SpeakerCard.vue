@@ -18,7 +18,6 @@ const emit = defineEmits<{
   stop: [device: Device]
   next: [device: Device]
   prev: [device: Device]
-  toggleShuffle: [device: Device]
   cycleRepeat: [device: Device]
   setSleep: [device: Device, minutes: number]
   volumeChange: [device: Device, volume: number]
@@ -40,7 +39,7 @@ const currentTrack = computed(() => props.state?.queue?.currentTrack)
 const queueInfo = computed(() => props.state?.queue)
 const hasQueue = computed(() => !!queueInfo.value)
 const nowPlaying = computed(() => props.state?.nowPlaying)
-const shuffleOn = computed(() => props.state?.queue?.shuffle ?? false)
+
 const repeatMode = computed(() => props.state?.queue?.repeat ?? 'off')
 const repeatIcon = computed(() =>
   repeatMode.value === 'one' ? 'mdi mdi-repeat-once' : 'mdi mdi-repeat'
@@ -118,13 +117,12 @@ const typeIcon = computed(() =>
       <div class="np-info">
         <div class="np-title">{{ currentTrack.title }}</div>
         <div class="np-artist">{{ currentTrack.artists?.join(', ') }}</div>
-        <div v-if="queueInfo && (queueInfo.trackCount > 1 || shuffleOn || repeatMode !== 'off')" class="np-queue">
+        <div v-if="queueInfo && (queueInfo.trackCount > 1 || repeatMode !== 'off')" class="np-queue">
           <template v-if="queueInfo.trackCount > 1">
             Track {{ queueInfo.currentIndex + 1 }} of {{ queueInfo.trackCount }}
           </template>
-          <span v-if="shuffleOn || repeatMode !== 'off'" class="np-modes">
+          <span v-if="repeatMode !== 'off'" class="np-modes">
             <template v-if="queueInfo.trackCount > 1">&middot;</template>
-            <i v-if="shuffleOn" class="mdi mdi-shuffle-variant"></i>
             <i v-if="repeatMode === 'all'" class="mdi mdi-repeat"></i>
             <i v-if="repeatMode === 'one'" class="mdi mdi-repeat-once"></i>
           </span>
@@ -164,14 +162,6 @@ const typeIcon = computed(() =>
         </div>
       </div>
       <div v-if="isActive" class="button-row">
-        <Button
-          v-if="isActive && hasQueue"
-          icon="mdi mdi-shuffle-variant"
-          rounded
-          text
-          :class="{ 'mode-active': shuffleOn }"
-          @click="$emit('toggleShuffle', device)"
-        />
         <Button
           v-if="isActive && hasQueue"
           icon="pi pi-step-backward"

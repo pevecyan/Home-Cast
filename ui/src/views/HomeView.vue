@@ -35,11 +35,17 @@ const groups = computed(() =>
   store.devices.filter(d => d.cast_type === 'group')
 )
 
-// Group member = audio chromecast when a group exists, unless it has its own active playlist
+// Group member = audio chromecast that is actually listed in at least one group's members array
+const groupMemberUuids = computed(() => {
+  const uuids = new Set<string>()
+  groups.value.forEach(g => g.members?.forEach(m => uuids.add(m)))
+  return uuids
+})
+
 const groupMembers = computed(() =>
-  groups.value.length
-    ? store.devices.filter(d => d.cast_type === 'audio' && !hasOwnPlaylist(d))
-    : []
+  store.devices.filter(d =>
+    d.cast_type === 'audio' && d.uuid && groupMemberUuids.value.has(d.uuid) && !hasOwnPlaylist(d)
+  )
 )
 
 // Idle group members (hidden unless expanded)
@@ -52,9 +58,14 @@ const activeGroupMembers = computed(() =>
   groupMembers.value.filter(d => isActive(d))
 )
 
-// Non-group devices (cast, sonos, groups themselves, and audio members with own playlist)
+// Non-group devices: everything that isn't an actual group member (or has its own playlist)
 const nonGroupDevices = computed(() =>
-  store.devices.filter(d => d.cast_type !== 'audio' || !groups.value.length || hasOwnPlaylist(d))
+  store.devices.filter(d =>
+    d.cast_type !== 'audio' ||
+    !d.uuid ||
+    !groupMemberUuids.value.has(d.uuid) ||
+    hasOwnPlaylist(d)
+  )
 )
 
 const activeSpeakers = computed(() => {
@@ -133,7 +144,7 @@ function onVolumeChange(device: Device, volume: number) {
               @stop="store.stop(device)"
               @next="store.next(device)"
               @prev="store.prev(device)"
-              @toggle-shuffle="store.toggleShuffle(device)"
+
               @cycle-repeat="store.cycleRepeat(device)"
               @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
               @volume-change="onVolumeChange"
@@ -153,7 +164,7 @@ function onVolumeChange(device: Device, volume: number) {
                 @stop="store.stop(member)"
                 @next="store.next(member)"
                 @prev="store.prev(member)"
-                @toggle-shuffle="store.toggleShuffle(member)"
+  
                 @cycle-repeat="store.cycleRepeat(member)"
                 @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
                 @volume-change="onVolumeChange"
@@ -193,7 +204,7 @@ function onVolumeChange(device: Device, volume: number) {
               @stop="store.stop(device)"
               @next="store.next(device)"
               @prev="store.prev(device)"
-              @toggle-shuffle="store.toggleShuffle(device)"
+
               @cycle-repeat="store.cycleRepeat(device)"
               @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
               @volume-change="onVolumeChange"
@@ -222,7 +233,7 @@ function onVolumeChange(device: Device, volume: number) {
                 @stop="store.stop(member)"
                 @next="store.next(member)"
                 @prev="store.prev(member)"
-                @toggle-shuffle="store.toggleShuffle(member)"
+  
                 @cycle-repeat="store.cycleRepeat(member)"
                 @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
                 @volume-change="onVolumeChange"
