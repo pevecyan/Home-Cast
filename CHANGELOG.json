@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.4.1",
+    "date": "2026-07-11",
+    "changes": [
+      "Fixed saved-playlist pre-warm spawning one download per track at startup, which could launch dozens of concurrent yt-dlp/ffmpeg processes and exhaust host memory (crashing Docker on low-RAM servers/NAS)",
+      "Pre-warm downloads now run one at a time through a single background worker, matching playback behavior",
+      "docker-compose.yaml now pins the current image tag and sets a memory limit so a transcode spike can't take down the host"
+    ]
+  },
+  {
     "version": "1.4.0",
     "date": "2026-07-11",
     "changes": [

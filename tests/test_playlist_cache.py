@@ -107,6 +107,42 @@ def test_prewarm_downloads_only_missing(tmp_path, monkeypatch):
     assert downloaded == ["need"]
 
 
+def test_prewarm_downloads_are_serialized(tmp_path, monkeypatch):
+    """Prewarm must never run more than one download at a time, so warming
+    many saved playlists at startup can't spawn a swarm of concurrent
+    yt-dlp/ffmpeg processes and exhaust host memory."""
+    cache = _make_cache(tmp_path)
+    import threading
+
+    concurrent = 0
+    max_concurrent = 0
+    guard = threading.Lock()
+
+    def fake_download(vid):
+        nonlocal concurrent, max_concurrent
+        with guard:
+            concurrent += 1
+            max_concurrent = max(max_concurrent, concurrent)
+        time.sleep(0.02)  # hold the "download" open so overlap would show
+        with guard:
+            concurrent -= 1
+        return _touch(cache, vid)
+
+    monkeypatch.setattr(cache, "download_song", fake_download)
+
+    ids = [f"song{i}" for i in range(8)]
+    cache.prewarm(ids)
+
+    # wait for all to finish
+    for _ in range(200):
+        if all((cache.cache_dir / f"{v}.mp3").exists() for v in ids):
+            break
+        time.sleep(0.01)
+
+    assert all((cache.cache_dir / f"{v}.mp3").exists() for v in ids)
+    assert max_concurrent == 1
+
+
 # --- playlist module wiring ---
 
 @pytest.fixture(autouse=True)

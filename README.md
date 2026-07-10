@@ -17,6 +17,11 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 
 ## Changelog
 
+### v1.4.1 — 2026-07-11
+- Fixed saved-playlist pre-warm spawning one download per track at startup, which could launch dozens of concurrent `yt-dlp`/`ffmpeg` processes and exhaust host memory (crashing Docker on low-RAM servers/NAS)
+- Pre-warm downloads now run one at a time through a single background worker, matching playback behavior
+- `docker-compose.yaml` now pins the current image tag and sets a memory limit so a transcode spike can't take down the host
+
 ### v1.4.0 — 2026-07-11
 - Discover: new home feed on the Search tab with YouTube Music rows (New releases, All hits, Today's biggest hits, and more) as horizontal card carousels
 - Mood & genre chips to browse curated playlists, with a wrap-to-fit layout and a **More** toggle

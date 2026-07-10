@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: ghcr.io/pevecyan/home-cast:1.0.0
+    image: ghcr.io/pevecyan/home-cast:1.4.1
     container_name: home-cast
     network_mode: "host"
     environment:
@@ -12,3 +12,13 @@ services:
       - /data/home-cast/cache:/data/home-cast/cache
       - /data/home-cast/data:/app/data
     restart: unless-stopped
+    # Cap memory so an audio-transcode spike (yt-dlp/ffmpeg) gets killed inside
+    # the container instead of taking down the Docker daemon / other containers
+    # on the host. Raise if playback of large playlists gets killed.
+    mem_limit: 1g
+    memswap_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

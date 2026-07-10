@@ -1,5 +1,6 @@
 import os
 import time
+import queue
 import logging
 import threading
 import subprocess
@@ -15,6 +16,12 @@ class SongCache:
         self.hostname = hostname.rstrip("/")
         self._downloads_in_progress = {}  # videoId -> threading.Event
         self._lock = threading.Lock()
+        # Serialized background prewarm: a single worker drains this queue so
+        # warming many saved playlists never spawns concurrent transcodes.
+        self._prewarm_queue = queue.Queue()
+        self._prewarm_queued = set()
+        self._prewarm_worker = None
+        self._prewarm_lock = threading.Lock()
         # Callable returning the set of videoIds that must never expire
         # (e.g. songs belonging to a saved playlist). Set via set_pin_provider.
         self._pin_provider = None
@@ -131,22 +138,53 @@ class SongCache:
                 path.unlink(missing_ok=True)
 
     def prewarm(self, video_ids):
-        """Download the given songs in the background if not already cached.
+        """Queue the given songs for background download if not already cached.
 
         Used to pre-fetch a saved playlist's tracks so the first play is
-        instant. Failures are logged and ignored -- they'll be retried lazily
-        on actual playback.
+        instant. Downloads run through a single serialized worker (one
+        yt-dlp/ffmpeg at a time) so warming many saved playlists at startup
+        can't spawn dozens of concurrent transcodes and exhaust host memory.
+        Failures are logged and ignored -- they'll be retried lazily on actual
+        playback.
         """
-        def worker(vid):
-            try:
-                self.ensure_song(vid)
-            except Exception as e:
-                logger.warning("Prewarm of %s failed: %s", vid, e)
-
         for vid in video_ids or []:
             if not vid or self.get_song_path(vid):
                 continue
-            threading.Thread(target=worker, args=(vid,), daemon=True).start()
+            with self._prewarm_lock:
+                if vid in self._prewarm_queued:
+                    continue
+                self._prewarm_queued.add(vid)
+                self._prewarm_queue.put(vid)
+                self._ensure_prewarm_worker()
+
+    def _ensure_prewarm_worker(self):
+        """Start the single prewarm worker thread if it isn't already running.
+        Must be called while holding self._prewarm_lock."""
+        if self._prewarm_worker and self._prewarm_worker.is_alive():
+            return
+
+        def worker():
+            while True:
+                try:
+                    vid = self._prewarm_queue.get(timeout=5)
+                except queue.Empty:
+                    # Idle: let the thread exit; it'll be recreated on demand.
+                    with self._prewarm_lock:
+                        if self._prewarm_queue.empty():
+                            self._prewarm_worker = None
+                            return
+                    continue
+                try:
+                    self.ensure_song(vid)
+                except Exception as e:
+                    logger.warning("Prewarm of %s failed: %s", vid, e)
+                finally:
+                    with self._prewarm_lock:
+                        self._prewarm_queued.discard(vid)
+                    self._prewarm_queue.task_done()
+
+        self._prewarm_worker = threading.Thread(target=worker, daemon=True)
+        self._prewarm_worker.start()
 
     def cleanup_expired(self):
         if not self.cache_dir.exists():
