@@ -27,7 +27,7 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 - Queue state restored from receiver on reconnect via custom message namespace
 - Simplified backend: Python sends queue once, CAF handles all advancement
 
-### v1.2.0 — 2026-04-23
+### V1.2.0 - 2026-04-23
 - Settings dialog with theme selector (light/dark/auto) and feature toggles
 - Volume lock: lock a speaker's volume via UI or API
 - Update banner: checks GitHub for new releases and shows indicator in sidebar
