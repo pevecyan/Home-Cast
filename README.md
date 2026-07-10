@@ -71,12 +71,22 @@ Copy `config.yaml.example` to `config.yaml` (for local dev) or set the `APP_HOST
 # config.yaml
 hostname: "http://192.168.1.100:5000"   # LAN IP — speakers must reach this
 port: 5000
+cast_app_id: "87584FFE"                 # custom Chromecast receiver app ID
 cache:
   ttl: 3600       # seconds to keep downloaded audio
   dir: "./cache"
 ```
 
 > **Important:** `hostname` must be the LAN IP/hostname of your server, not `localhost`. Chromecast and Sonos devices fetch audio files directly from this URL.
+
+### Custom Chromecast receiver (`cast_app_id`)
+
+Chromecast playback uses a custom receiver app. Set `cast_app_id` to your registered receiver's application ID. You can either:
+
+- **Use the public app ID `87584FFE`** — the receiver maintained for this project. No setup required; just set `cast_app_id: "87584FFE"` and go.
+- **Register your own** — deploy the receiver from the `receiver/` folder to the [Google Cast Developer Console](https://cast.google.com/publish/), then use the application ID it assigns. See [`CustomReceiver.md`](CustomReceiver.md) for the full walkthrough.
+
+If `cast_app_id` is left empty, the custom receiver is not launched — you lose the on-screen queue, album art, and external remote control (Google Home / voice / physical remotes).
 
 ### Docker environment variables
 
