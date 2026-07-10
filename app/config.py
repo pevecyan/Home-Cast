@@ -5,6 +5,7 @@ import yaml
 _defaults = {
     "hostname": "http://localhost:5000",
     "port": 5000,
+    "cast_app_id": None,
     "cache": {
         "ttl": 3600,
         "dir": "./cache",

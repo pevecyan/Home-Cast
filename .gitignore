@@ -7,3 +7,5 @@ node_modules/
 ui/dist/
 .env
 config.yaml
+receiver/cert.pem
+receiver/key.pem

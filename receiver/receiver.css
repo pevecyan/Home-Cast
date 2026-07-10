@@ -1,0 +1,295 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --accent: #6366f1;
+  --accent-dim: rgba(99, 102, 241, 0.25);
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --surface2: #23232f;
+  --text-primary: #f1f1f5;
+  --text-secondary: #9191a8;
+  --border: rgba(255, 255, 255, 0.07);
+  --radius: 12px;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Google Sans', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ── App container ── */
+#app {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Idle screen ── */
+#idle-screen {
+  flex-direction: column;
+  gap: 20px;
+  background: radial-gradient(ellipse at 50% 40%, #1a1a2e 0%, var(--bg) 70%);
+}
+
+.idle-logo svg {
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 0 24px rgba(99, 102, 241, 0.4));
+}
+
+.idle-label {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.idle-sub {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+}
+
+/* ── Now playing screen ── */
+#playing-screen {
+  padding: 0;
+}
+
+.now-playing {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Left panel ── */
+.now-playing-left {
+  flex: 0 0 55%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 48px 48px;
+  gap: 28px;
+  position: relative;
+  background: linear-gradient(135deg, #14141e 0%, var(--bg) 100%);
+}
+
+.album-art-wrap {
+  width: 320px;
+  height: 320px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border);
+  flex-shrink: 0;
+  position: relative;
+  background: var(--surface);
+}
+
+#album-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.album-art-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+}
+
+.album-art-placeholder svg {
+  width: 80px;
+  height: 80px;
+}
+
+.track-info {
+  text-align: center;
+  width: 100%;
+  max-width: 380px;
+}
+
+.track-title {
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 8px;
+}
+
+.track-artist {
+  font-size: 1.1rem;
+  color: var(--accent);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.track-album {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Progress ── */
+.progress-wrap {
+  width: 100%;
+  max-width: 380px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s linear;
+  width: 0%;
+}
+
+.progress-times {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-position {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--surface2);
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+/* ── Right panel: queue ── */
+.now-playing-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 48px 40px 48px 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.queue-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.queue-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.queue-list::-webkit-scrollbar {
+  display: none;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+
+.queue-item--current {
+  background: var(--accent-dim);
+}
+
+.queue-item-num {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 20px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.queue-item--current .queue-item-num {
+  color: var(--accent);
+}
+
+.queue-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-item-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item--current .queue-item-title {
+  color: var(--accent);
+}
+
+.queue-item-artist {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* ── Hide the default CAF player UI ── */
+cast-media-player {
+  display: none;
+}

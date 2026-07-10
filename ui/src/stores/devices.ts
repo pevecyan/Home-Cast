@@ -12,7 +12,7 @@ import {
   setVolume,
   nextTrack,
   prevTrack,
-  setShuffle,
+
   setRepeat,
   setSleepTimer,
   playTrackAt,
@@ -227,13 +227,6 @@ export const useDevicesStore = defineStore('devices', () => {
     await transferQueue(fromDevice.slug, toDevice.slug, toDevice.type)
   }
 
-  async function toggleShuffle(device: Device) {
-    const state = getState(device)
-    const current = state?.queue?.shuffle ?? false
-    await setShuffle(device.slug, device.type, !current)
-    if (!wsConnected.value) await fetchState(device)
-  }
-
   async function cycleRepeat(device: Device) {
     const state = getState(device)
     const current = state?.queue?.repeat ?? 'off'
@@ -285,7 +278,7 @@ export const useDevicesStore = defineStore('devices', () => {
     prev,
     jumpToTrack,
     transfer,
-    toggleShuffle,
+
     cycleRepeat,
     setSleep,
     refresh,

@@ -17,6 +17,16 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 
 ## Changelog
 
+### v1.3.0 — 2026-07-11
+- Custom Chromecast Receiver: queue is now managed natively on the device via Google Cast Application Framework v3
+- Google Home, voice commands, and physical remotes can now control next/prev/pause
+- Receiver displays album art, track info, progress bar, and upcoming queue on the TV screen
+- New `cast_app_id` config option to specify your registered custom receiver app
+- Removed shuffle toggle (shuffle is pre-shuffle only — reloads queue in new order)
+- Notification sounds handled by the receiver (no more Python-side pause/resume logic)
+- Queue state restored from receiver on reconnect via custom message namespace
+- Simplified backend: Python sends queue once, CAF handles all advancement
+
 ### V1.2.0 - 2026-04-23
 - Settings dialog with theme selector (light/dark/auto) and feature toggles
 - Volume lock: lock a speaker's volume via UI or API

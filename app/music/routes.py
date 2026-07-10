@@ -149,11 +149,11 @@ def play():
         if repeat != "off":
             sonos.set_repeat(device, repeat)
     else:
-        # Chromecast: play MP3s one by one via queue
         cc = chromecast.get_by_slug(slug)
         if not cc:
             return jsonify({"error": "Chromecast device not found"}), 400
-        queue = chromecast.get_queue(slug, cc, cache)
+        cast_app_id = current_app.config["APP"].get("cast_app_id")
+        queue = chromecast.get_queue(slug, cc, cache, cast_app_id=cast_app_id)
         queue.load(tracks, shuffle=shuffle, repeat=repeat)
 
     return jsonify({
@@ -178,9 +178,7 @@ def transfer():
     if not queue or not queue.tracks:
         return jsonify({"error": "No active queue on source device"}), 400
 
-    tracks = queue.tracks
-    current_index = queue.current
-    shuffle = queue.shuffle
+    tracks = queue._shuffled_tracks or queue.tracks
     repeat = queue.repeat
 
     cache = get_cache()
@@ -201,26 +199,15 @@ def transfer():
         if not device:
             return jsonify({"error": "Target Sonos device not found"}), 400
         sonos.play_media(device, m3u_url)
-        if shuffle:
-            sonos.set_shuffle(device, True)
         if repeat != "off":
             sonos.set_repeat(device, repeat)
     else:
         cc_to = chromecast.get_by_slug(to_slug)
         if not cc_to:
             return jsonify({"error": "Target Chromecast device not found"}), 400
-        new_queue = chromecast.get_queue(to_slug, cc_to, cache)
-        new_queue.tracks = list(tracks)
-        new_queue.shuffle = shuffle
-        new_queue.repeat = repeat
-        new_queue._build_play_order()
-        # Position play order to start at current_index
-        if current_index in new_queue._play_order:
-            new_queue._order_pos = new_queue._play_order.index(current_index)
-        else:
-            new_queue._order_pos = 0
-        new_queue.current = new_queue._play_order[new_queue._order_pos]
-        new_queue._play_current()
+        cast_app_id = current_app.config["APP"].get("cast_app_id")
+        new_queue = chromecast.get_queue(to_slug, cc_to, cache, cast_app_id=cast_app_id)
+        new_queue.load(tracks, repeat=repeat)
 
     from app.ws import broadcast_states
     broadcast_states()
@@ -344,7 +331,8 @@ def play_saved_playlist(playlist_id):
         cc = chromecast.get_by_slug(slug)
         if not cc:
             return jsonify({"error": "Chromecast device not found"}), 400
-        queue = chromecast.get_queue(slug, cc, cache)
+        cast_app_id = current_app.config["APP"].get("cast_app_id")
+        queue = chromecast.get_queue(slug, cc, cache, cast_app_id=cast_app_id)
         queue.load(tracks, shuffle=shuffle, repeat=repeat)
 
     return jsonify({

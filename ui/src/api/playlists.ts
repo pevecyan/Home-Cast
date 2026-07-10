@@ -24,5 +24,5 @@ export const updatePlaylist = (id: string, data: Partial<SavedPlaylist>) =>
 export const deletePlaylist = (id: string) =>
   api.delete(`/music/playlists/${id}`).then(r => r.data)
 
-export const playSavedPlaylist = (id: string, slug: string, type: string) =>
-  api.post(`/music/playlists/${id}/play`, { slug, type }).then(r => r.data)
+export const playSavedPlaylist = (id: string, slug: string, type: string, shuffle = false, repeat = 'off') =>
+  api.post(`/music/playlists/${id}/play`, { slug, type, shuffle, repeat }).then(r => r.data)

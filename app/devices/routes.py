@@ -288,27 +288,6 @@ def play_track_by_slug():
     return jsonify({"status": "playing", "index": index})
 
 
-@devices_bp.route("/device/slug/shuffle", methods=["POST"])
-def shuffle_by_slug():
-    data = request.json
-    slug = data.get("slug")
-    enabled = data.get("enabled", False)
-    device_type = data.get("type", "chromecast")
-    if device_type == "sonos":
-        device = sonos.get_by_slug(slug)
-        if not device:
-            return jsonify({"error": "Device not found"}), 400
-        result = sonos.set_shuffle(device, enabled)
-        broadcast_states()
-        return jsonify(result)
-    else:
-        queue = chromecast.get_queue(slug)
-        if not queue:
-            return jsonify({"error": "No active queue for this device"}), 400
-        queue.set_shuffle(enabled)
-        broadcast_states()
-        return jsonify({"shuffle": queue.shuffle})
-
 
 @devices_bp.route("/device/slug/repeat", methods=["POST"])
 def repeat_by_slug():

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#0d0d1a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6c63ff"/>
+      <stop offset="100%" style="stop-color:#3ecfcf"/>
+    </linearGradient>
+    <linearGradient id="note" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#d0d0ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" ry="96" fill="url(#bg)"/>
+
+  <!-- Outer glow ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="url(#accent)" stroke-width="6" opacity="0.35"/>
+
+  <!-- Cast wave arcs (bottom-left corner style) -->
+  <g transform="translate(90, 370)">
+    <!-- Dot -->
+    <circle cx="0" cy="0" r="18" fill="url(#accent)"/>
+    <!-- Arc 1 -->
+    <path d="M -2 -44 A 44 44 0 0 1 42 -2" fill="none" stroke="url(#accent)" stroke-width="16" stroke-linecap="round"/>
+    <!-- Arc 2 -->
+    <path d="M -2 -90 A 90 90 0 0 1 88 -2" fill="none" stroke="url(#accent)" stroke-width="16" stroke-linecap="round" opacity="0.7"/>
+    <!-- Arc 3 -->
+    <path d="M -2 -138 A 138 138 0 0 1 136 -2" fill="none" stroke="url(#accent)" stroke-width="16" stroke-linecap="round" opacity="0.45"/>
+  </g>
+
+  <!-- Music note (right side) -->
+  <g transform="translate(270, 130)">
+    <!-- Note stem -->
+    <rect x="82" y="0" width="16" height="110" rx="8" fill="url(#note)"/>
+    <!-- Note head -->
+    <ellipse cx="66" cy="112" rx="32" ry="22" fill="url(#note)" transform="rotate(-15 66 112)"/>
+    <!-- Second note stem -->
+    <rect x="148" y="24" width="16" height="96" rx="8" fill="url(#note)"/>
+    <!-- Second note head -->
+    <ellipse cx="132" cy="122" rx="32" ry="22" fill="url(#note)" transform="rotate(-15 132 122)"/>
+    <!-- Beam connecting the two stems -->
+    <rect x="82" y="0" width="82" height="16" rx="8" fill="url(#note)"/>
+  </g>
+
+</svg>
