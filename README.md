@@ -17,7 +17,7 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 
 ## Changelog
 
-### v1.3.0-preview — 2026-05-02
+### v1.3.0 — 2026-07-11
 - Custom Chromecast Receiver: queue is now managed natively on the device via Google Cast Application Framework v3
 - Google Home, voice commands, and physical remotes can now control next/prev/pause
 - Receiver displays album art, track info, progress bar, and upcoming queue on the TV screen
