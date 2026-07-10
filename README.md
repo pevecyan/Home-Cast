@@ -17,6 +17,15 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 
 ## Changelog
 
+### v1.4.0 — 2026-07-11
+- Discover: new home feed on the Search tab with YouTube Music rows (New releases, All hits, Today's biggest hits, and more) as horizontal card carousels
+- Mood & genre chips to browse curated playlists, with a wrap-to-fit layout and a **More** toggle
+- Control all speakers at once: pause/play/next/prev/stop now accept slug `all` and fan out to every device, tolerating per-device failures
+- Saved playlists now show a cover image, fetched from the first track and stored with the playlist
+- Saved-playlist songs are pinned in the cache and pre-warmed on save so playlists start playing instantly; orphaned tracks are evicted
+- Volume slider shows a live percentage bubble while dragging
+- Upgraded `ytmusicapi` to 1.12.1 and made mood browsing resilient to mixed song/playlist sections that previously errored
+
 ### v1.3.0 — 2026-07-11
 - Custom Chromecast Receiver: queue is now managed natively on the device via Google Cast Application Framework v3
 - Google Home, voice commands, and physical remotes can now control next/prev/pause
@@ -122,6 +131,31 @@ All endpoints accept and return JSON.
 | POST | `/device/slug/notify` | Play notification sound, then resume |
 
 Device body always includes `{ "slug": "...", "type": "chromecast" | "sonos" }`.
+
+#### Controlling all speakers at once
+
+Pass `"slug": "all"` to a playback command (`pause`, `resume`, `stop`, `volume/set`,
+`volume/delta`, `next`, `prev`, `repeat`, `sleep`, `notify`) to fan the action out to
+every discovered device. `type` then acts as a filter: `"type": "sonos"` or
+`"type": "chromecast"` limits the fan-out to that kind; omitting `type` (or `"type": "all"`)
+targets everything.
+
+The response is an aggregate, with one entry per device that never aborts on a single
+failure:
+
+```json
+POST /device/slug/pause
+{ "slug": "all" }
+
+{ "results": [
+  { "slug": "kitchen", "type": "chromecast", "ok": true, "result": { ... } },
+  { "slug": "living_room", "type": "sonos", "ok": false, "error": "Device not found" }
+] }
+```
+
+A single locked device (see volume lock) is reported as `"ok": false` and skipped rather
+than blocking the rest. Read/single-only endpoints (`state`, `volume` GET, `play-url`,
+`play-track`, volume `lock`/`unlock`) do not support `all`.
 
 #### Notification sound example
 

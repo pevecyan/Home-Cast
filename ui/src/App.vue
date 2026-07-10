@@ -46,7 +46,7 @@ onUnmounted(() => {
 
 const navItems = [
   { label: 'Home', icon: 'mdi mdi-home-variant', to: '/' },
-  { label: 'Search', icon: 'mdi mdi-magnify', to: '/search' },
+  { label: 'Discover', icon: 'mdi mdi-compass-outline', to: '/search' },
   { label: 'Radio', icon: 'mdi mdi-radio', to: '/radio' },
   { label: 'Playlists', icon: 'mdi mdi-playlist-music', to: '/playlists' },
 ]
@@ -356,6 +356,7 @@ async function openChangelog() {
 /* ── Main content ── */
 .main-content {
   flex: 1;
+  min-width: 0;
   margin-left: 240px;
   min-height: 100vh;
   display: flex;

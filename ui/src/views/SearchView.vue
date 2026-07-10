@@ -4,7 +4,8 @@ import { useRouter } from 'vue-router'
 import SearchBar from '../components/SearchBar.vue'
 import TrackList from '../components/TrackList.vue'
 import SpeakerPicker from '../components/SpeakerPicker.vue'
-import { searchMusic, type Track, type Artist, type Playlist } from '../api/music'
+import { searchMusic, type Track, type Artist, type Playlist, type DiscoverCard } from '../api/music'
+import DiscoverFeed from '../components/DiscoverFeed.vue'
 import { usePlayerStore } from '../stores/player'
 import { useDevicesStore } from '../stores/devices'
 import { useRecentStore } from '../stores/recent'
@@ -28,6 +29,7 @@ const showAddToPlaylist = ref(false)
 const playlistTrack = ref<Track | null>(null)
 
 const showRecent = computed(() => !searched.value && !loading.value && recent.items.length > 0)
+const showDiscover = computed(() => !searched.value && !loading.value)
 
 devicesStore.fetchDevices()
 
@@ -93,6 +95,23 @@ function onAddToPlaylist(track: Track) {
   playlistTrack.value = track
   showAddToPlaylist.value = true
 }
+
+function onDiscoverSelect(card: DiscoverCard) {
+  if (card.kind === 'song' && card.videoId) {
+    onPlayTrack({
+      videoId: card.videoId,
+      title: card.title,
+      artists: card.artists ?? [],
+      thumbnail: card.thumbnail,
+    })
+  } else if (card.kind === 'playlist' && card.playlistId) {
+    router.push({ name: 'playlist', params: { playlistId: card.playlistId } })
+  } else if (card.kind === 'album' && card.browseId) {
+    router.push({ name: 'album', params: { browseId: card.browseId } })
+  } else if (card.kind === 'artist' && card.browseId) {
+    router.push({ name: 'artist', params: { browseId: card.browseId } })
+  }
+}
 </script>
 
 <template>
@@ -133,6 +152,9 @@ function onAddToPlaylist(track: Track) {
         </div>
       </div>
     </div>
+
+    <!-- Discover feed (before search) -->
+    <DiscoverFeed v-if="showDiscover" @select="onDiscoverSelect" />
 
     <!-- Loading -->
     <div v-if="loading" class="loading">
@@ -226,6 +248,9 @@ function onAddToPlaylist(track: Track) {
 <style scoped>
 .search-view {
   padding: 20px 16px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .page-title {

@@ -55,6 +55,40 @@ def _device_action(device, device_type, action, **kwargs):
     return fn(device, **kwargs)
 
 
+def _resolve_targets(slug, device_type):
+    """Return list of (slug, dtype) to act on. Expands slug=='all' via device cache."""
+    if slug != "all":
+        return [(slug, device_type or "chromecast")]
+    devices = get_all_devices()
+    if device_type and device_type != "all":
+        devices = [d for d in devices if d["type"] == device_type]
+    return [(d["slug"], d["type"]) for d in devices]
+
+
+def _fan_out(slug, device_type, per_device):
+    """Run per_device(target_slug, target_dtype) for the resolved target(s).
+
+    Single slug: returns per_device's result directly (caller handles the
+    response, back-compat). slug=='all': runs for every target, tolerating
+    per-device failures, broadcasts once, and returns a Flask JSON response
+    of the aggregated results. Callers detect the aggregate by checking for
+    a Flask Response (has ``status_code``).
+    """
+    targets = _resolve_targets(slug, device_type)
+    if slug != "all":
+        s, t = targets[0]
+        return per_device(s, t)
+    results = []
+    for s, t in targets:
+        try:
+            results.append({"slug": s, "type": t, "result": per_device(s, t), "ok": True})
+        except Exception as e:  # one bad device must not abort the rest
+            logger.exception("all-fanout failed for %s:%s", s, t)
+            results.append({"slug": s, "type": t, "error": str(e), "ok": False})
+    broadcast_states()
+    return jsonify({"results": results})
+
+
 # --- Device listing ---
 
 @devices_bp.route("/get-devices", methods=["GET"])
@@ -138,37 +172,53 @@ def play_url_by_slug():
     return jsonify(result)
 
 
+def _simple_action(action):
+    """Build a per-device callable that resolves the device and runs a no-arg action."""
+    def act(slug, dtype):
+        device, dtype = _get_device(slug, dtype)
+        if not device:
+            raise ValueError("Device not found")
+        return _device_action(device, dtype, action)
+    return act
+
+
+def _respond(out):
+    """Finalize a _fan_out result. Aggregate (Flask Response) is returned as-is;
+    single-slug result is broadcast once and wrapped in jsonify."""
+    if hasattr(out, "status_code"):
+        return out
+    broadcast_states()
+    return jsonify(out)
+
+
 @devices_bp.route("/device/slug/pause", methods=["POST"])
 def pause_by_slug():
     data = request.json
-    device, dtype = _get_device(data.get("slug"), data.get("type", "chromecast"))
-    if not device:
+    try:
+        out = _fan_out(data.get("slug"), data.get("type"), _simple_action("pause"))
+    except ValueError:
         return jsonify({"error": "Device not found"}), 400
-    result = _device_action(device, dtype, "pause")
-    broadcast_states()
-    return jsonify(result)
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/resume", methods=["POST"])
 def resume_by_slug():
     data = request.json
-    device, dtype = _get_device(data.get("slug"), data.get("type", "chromecast"))
-    if not device:
+    try:
+        out = _fan_out(data.get("slug"), data.get("type"), _simple_action("resume"))
+    except ValueError:
         return jsonify({"error": "Device not found"}), 400
-    result = _device_action(device, dtype, "resume")
-    broadcast_states()
-    return jsonify(result)
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/stop", methods=["POST"])
 def stop_by_slug():
     data = request.json
-    device, dtype = _get_device(data.get("slug"), data.get("type", "chromecast"))
-    if not device:
+    try:
+        out = _fan_out(data.get("slug"), data.get("type"), _simple_action("stop"))
+    except ValueError:
         return jsonify({"error": "Device not found"}), 400
-    result = _device_action(device, dtype, "stop")
-    broadcast_states()
-    return jsonify(result)
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/volume", methods=["POST"])
@@ -185,14 +235,24 @@ def set_volume_by_slug():
     data = request.json
     slug = data.get("slug")
     dtype = data.get("type", "chromecast")
-    if f"{slug}:{dtype}" in _volume_locks:
+    # Single-slug: a locked device is a hard 423 (unchanged behavior).
+    if slug != "all" and f"{slug}:{dtype}" in _volume_locks:
         return jsonify({"error": "volume locked"}), 423
-    device, dtype = _get_device(slug, dtype)
-    if not device:
+
+    def act(s, t):
+        # In an all-fanout, a locked device is skipped as an ok:false entry.
+        if f"{s}:{t}" in _volume_locks:
+            raise ValueError("volume locked")
+        device, t = _get_device(s, t)
+        if not device:
+            raise ValueError("Device not found")
+        return _device_action(device, t, "set_volume", volume=data.get("volume"))
+
+    try:
+        out = _fan_out(slug, data.get("type"), act)
+    except ValueError:
         return jsonify({"error": "Device not found"}), 400
-    result = _device_action(device, dtype, "set_volume", volume=data.get("volume"))
-    broadcast_states()
-    return jsonify(result)
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/volume/delta", methods=["POST"])
@@ -200,12 +260,22 @@ def volume_delta_by_slug():
     data = request.json
     slug = data.get("slug")
     dtype = data.get("type", "chromecast")
-    if f"{slug}:{dtype}" in _volume_locks:
+    if slug != "all" and f"{slug}:{dtype}" in _volume_locks:
         return jsonify({"error": "volume locked"}), 423
-    device, dtype = _get_device(slug, dtype)
-    if not device:
+
+    def act(s, t):
+        if f"{s}:{t}" in _volume_locks:
+            raise ValueError("volume locked")
+        device, t = _get_device(s, t)
+        if not device:
+            raise ValueError("Device not found")
+        return _device_action(device, t, "adjust_volume", delta=data.get("delta"))
+
+    try:
+        out = _fan_out(slug, data.get("type"), act)
+    except ValueError:
         return jsonify({"error": "Device not found"}), 400
-    return jsonify(_device_action(device, dtype, "adjust_volume", delta=data.get("delta")))
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/volume/lock", methods=["POST"])
@@ -234,43 +304,47 @@ def unlock_volume():
 @devices_bp.route("/device/slug/next", methods=["POST"])
 def next_by_slug():
     data = request.json
-    slug = data.get("slug")
-    device_type = data.get("type", "chromecast")
-    if device_type == "sonos":
-        device = sonos.get_by_slug(slug)
-        if not device:
-            return jsonify({"error": "Device not found"}), 400
-        result = sonos.next_track(device)
-        broadcast_states()
-        return jsonify(result)
-    else:
+
+    def act(slug, dtype):
+        if dtype == "sonos":
+            device = sonos.get_by_slug(slug)
+            if not device:
+                raise ValueError("Device not found")
+            return sonos.next_track(device)
         queue = chromecast.get_queue(slug)
         if not queue:
-            return jsonify({"error": "No active queue for this device"}), 400
+            raise ValueError("No active queue for this device")
         queue.play_next()
-        broadcast_states()
-        return jsonify({"status": "next"})
+        return {"status": "next"}
+
+    try:
+        out = _fan_out(data.get("slug"), data.get("type"), act)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/prev", methods=["POST"])
 def prev_by_slug():
     data = request.json
-    slug = data.get("slug")
-    device_type = data.get("type", "chromecast")
-    if device_type == "sonos":
-        device = sonos.get_by_slug(slug)
-        if not device:
-            return jsonify({"error": "Device not found"}), 400
-        result = sonos.prev_track(device)
-        broadcast_states()
-        return jsonify(result)
-    else:
+
+    def act(slug, dtype):
+        if dtype == "sonos":
+            device = sonos.get_by_slug(slug)
+            if not device:
+                raise ValueError("Device not found")
+            return sonos.prev_track(device)
         queue = chromecast.get_queue(slug)
         if not queue:
-            return jsonify({"error": "No active queue for this device"}), 400
+            raise ValueError("No active queue for this device")
         queue.play_prev()
-        broadcast_states()
-        return jsonify({"status": "previous"})
+        return {"status": "previous"}
+
+    try:
+        out = _fan_out(data.get("slug"), data.get("type"), act)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/play-track", methods=["POST"])
@@ -292,73 +366,78 @@ def play_track_by_slug():
 @devices_bp.route("/device/slug/repeat", methods=["POST"])
 def repeat_by_slug():
     data = request.json
-    slug = data.get("slug")
     mode = data.get("mode", "off")
-    device_type = data.get("type", "chromecast")
-    if device_type == "sonos":
-        device = sonos.get_by_slug(slug)
-        if not device:
-            return jsonify({"error": "Device not found"}), 400
-        result = sonos.set_repeat(device, mode)
-        broadcast_states()
-        return jsonify(result)
-    else:
+
+    def act(slug, dtype):
+        if dtype == "sonos":
+            device = sonos.get_by_slug(slug)
+            if not device:
+                raise ValueError("Device not found")
+            return sonos.set_repeat(device, mode)
         queue = chromecast.get_queue(slug)
         if not queue:
-            return jsonify({"error": "No active queue for this device"}), 400
+            raise ValueError("No active queue for this device")
         queue.set_repeat(mode)
-        broadcast_states()
-        return jsonify({"repeat": queue.repeat})
+        return {"repeat": queue.repeat}
+
+    try:
+        out = _fan_out(data.get("slug"), data.get("type"), act)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/sleep", methods=["POST"])
 def sleep_by_slug():
     data = request.json
-    slug = data.get("slug")
-    device_type = data.get("type", "chromecast")
     minutes = data.get("minutes", 0)
-    key = f"{slug}:{device_type}"
+    # Shared end time so an all-fanout schedules every device to stop together.
+    ends_at = (datetime.now() + timedelta(minutes=minutes)).isoformat() if minutes > 0 else None
 
-    # cancel existing timer
-    existing = _sleep_timers.pop(key, None)
-    if existing and existing["timer"].is_alive():
-        existing["timer"].cancel()
+    def act(slug, dtype):
+        key = f"{slug}:{dtype}"
+        # cancel existing timer
+        existing = _sleep_timers.pop(key, None)
+        if existing and existing["timer"].is_alive():
+            existing["timer"].cancel()
 
-    if minutes <= 0:
-        broadcast_states()
-        return jsonify({"status": "cancelled"})
+        if minutes <= 0:
+            return {"status": "cancelled"}
 
-    ends_at = (datetime.now() + timedelta(minutes=minutes)).isoformat()
-    timer = threading.Timer(minutes * 60, _stop_device_for_sleep, args=[slug, device_type])
-    timer.daemon = True
-    timer.start()
-    _sleep_timers[key] = {"timer": timer, "ends_at": ends_at}
+        timer = threading.Timer(minutes * 60, _stop_device_for_sleep, args=[slug, dtype])
+        timer.daemon = True
+        timer.start()
+        _sleep_timers[key] = {"timer": timer, "ends_at": ends_at}
+        return {"sleepMinutes": minutes, "sleepEndsAt": ends_at}
 
-    broadcast_states()
-    return jsonify({"sleepMinutes": minutes, "sleepEndsAt": ends_at})
+    out = _fan_out(data.get("slug"), data.get("type"), act)
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/notify", methods=["POST"])
 def notify_by_slug():
     data = request.json
-    slug = data.get("slug")
-    device_type = data.get("type", "chromecast")
     sound_url = data.get("soundUrl")
     if not sound_url:
         return jsonify({"error": "soundUrl is required"}), 400
-    if device_type == "sonos":
-        device = sonos.get_by_slug(slug)
-        if not device:
-            return jsonify({"error": "Device not found"}), 400
-        result = sonos.play_notification(device, sound_url)
-    else:
+    media_type = data.get("mediaType", "audio/mp3")
+
+    def act(slug, dtype):
+        if dtype == "sonos":
+            device = sonos.get_by_slug(slug)
+            if not device:
+                raise ValueError("Device not found")
+            return sonos.play_notification(device, sound_url)
         cc = chromecast.get_by_slug(slug)
         if not cc:
-            return jsonify({"error": "Device not found"}), 400
-        media_type = data.get("mediaType", "audio/mp3")
-        result = chromecast.play_notification(cc, slug, sound_url, media_type)
-    broadcast_states()
-    return jsonify(result)
+            raise ValueError("Device not found")
+        return chromecast.play_notification(cc, slug, sound_url, media_type)
+
+    try:
+        out = _fan_out(data.get("slug"), data.get("type"), act)
+    except ValueError:
+        return jsonify({"error": "Device not found"}), 400
+    return _respond(out)
 
 
 @devices_bp.route("/device/slug/state", methods=["POST"])

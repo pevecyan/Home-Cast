@@ -27,6 +27,38 @@ def search_music():
     return jsonify(results)
 
 
+# --- Discover (home feed + moods) ---
+
+@music_bp.route("/home", methods=["GET"])
+def home_feed():
+    """YouTube Music home feed: rows of playlist/album/song/artist cards."""
+    try:
+        return jsonify(ytmusic.get_home())
+    except Exception as e:
+        logger.exception("Failed to fetch home feed")
+        return jsonify({"error": str(e)}), 502
+
+
+@music_bp.route("/moods", methods=["GET"])
+def mood_categories():
+    """Mood/genre chips shown at the top of Discover."""
+    try:
+        return jsonify(ytmusic.get_mood_categories())
+    except Exception as e:
+        logger.exception("Failed to fetch mood categories")
+        return jsonify({"error": str(e)}), 502
+
+
+@music_bp.route("/moods/<params>", methods=["GET"])
+def mood_playlists(params):
+    """Playlists for a selected mood/genre chip."""
+    try:
+        return jsonify(ytmusic.get_mood_playlists(params))
+    except Exception as e:
+        logger.exception("Failed to fetch mood playlists")
+        return jsonify({"error": str(e)}), 502
+
+
 @music_bp.route("/artist/<browse_id>", methods=["GET"])
 def get_artist(browse_id):
     result = ytmusic.get_artist(browse_id)

@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.4.0",
+    "date": "2026-07-11",
+    "changes": [
+      "Discover: new home feed on the Search tab with YouTube Music rows (New releases, All hits, Today's biggest hits, and more) as horizontal card carousels",
+      "Mood & genre chips to browse curated playlists, with a wrap-to-fit layout and a More toggle",
+      "Control all speakers at once: pause/play/next/prev/stop now accept slug \"all\" and fan out to every device, tolerating per-device failures",
+      "Saved playlists now show a cover image, fetched from the first track and stored with the playlist",
+      "Saved-playlist songs are pinned in the cache and pre-warmed on save so playlists start playing instantly; orphaned tracks are evicted",
+      "Volume slider shows a live percentage bubble while dragging",
+      "Upgraded ytmusicapi to 1.12.1 and made mood browsing resilient to mixed song/playlist sections that previously errored"
+    ]
+  },
+  {
     "version": "1.3.0",
     "date": "2026-07-11",
     "changes": [

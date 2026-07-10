@@ -1,11 +1,44 @@
 import json
 import uuid
+import base64
 import logging
 from pathlib import Path
+
+import requests
 
 logger = logging.getLogger(__name__)
 
 PLAYLISTS_FILE = Path("data/playlists.json")
+
+# Cap the stored cover so playlists.json doesn't bloat with a huge image.
+_COVER_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
+_COVER_TIMEOUT = 10  # seconds
+
+
+def _fetch_cover_base64(tracks):
+    """Return a base64 data URI for the first track that has a fetchable
+    thumbnail, or None. For custom playlists this naturally uses the first
+    song we can get a picture of.
+    """
+    for track in tracks or []:
+        url = track.get("thumbnail")
+        if not url:
+            continue
+        try:
+            resp = requests.get(url, timeout=_COVER_TIMEOUT)
+            resp.raise_for_status()
+            content = resp.content
+            if not content or len(content) > _COVER_MAX_BYTES:
+                continue
+            mime = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+            if not mime.startswith("image/"):
+                mime = "image/jpeg"
+            encoded = base64.b64encode(content).decode("ascii")
+            return f"data:{mime};base64,{encoded}"
+        except Exception as e:
+            logger.debug("Failed to fetch cover from %s: %s", url, e)
+            continue
+    return None
 
 
 def generate_m3u(tracks, hostname):
@@ -67,15 +100,53 @@ def list_playlists():
     return _load_playlists()
 
 
+def _track_ids(tracks):
+    return [t.get("videoId") for t in (tracks or []) if t.get("videoId")]
+
+
+def pinned_video_ids():
+    """Return the set of videoIds referenced by any saved playlist.
+
+    These songs are kept in the cache indefinitely so playlists start playing
+    immediately. Registered with the SongCache as its pin provider.
+    """
+    ids = set()
+    for pl in _load_playlists():
+        ids.update(_track_ids(pl.get("tracks")))
+    return ids
+
+
+def _prewarm(tracks):
+    """Kick off background downloads for a playlist's tracks. Imported lazily
+    to avoid a circular import at module load."""
+    try:
+        from app.music.downloader import get_cache
+        get_cache().prewarm(_track_ids(tracks))
+    except Exception:
+        logger.exception("Failed to prewarm playlist tracks")
+
+
+def _evict(video_ids):
+    """Drop cached files for tracks no longer referenced by any playlist."""
+    try:
+        from app.music.downloader import get_cache
+        get_cache().evict_unpinned(video_ids)
+    except Exception:
+        logger.exception("Failed to evict orphaned tracks")
+
+
 def create_playlist(name, tracks=None):
     playlists = _load_playlists()
+    tracks = tracks or []
     pl = {
         "id": str(uuid.uuid4()),
         "name": name,
-        "tracks": tracks or [],
+        "tracks": tracks,
+        "cover": _fetch_cover_base64(tracks),
     }
     playlists.append(pl)
     _save_playlists(playlists)
+    _prewarm(tracks)
     return pl
 
 
@@ -90,16 +161,28 @@ def update_playlist(playlist_id, name=None, tracks=None):
     playlists = _load_playlists()
     for pl in playlists:
         if pl["id"] == playlist_id:
+            old_ids = set(_track_ids(pl.get("tracks")))
             if name is not None:
                 pl["name"] = name
             if tracks is not None:
                 pl["tracks"] = tracks
+                # (Re)compute the cover when it's missing -- e.g. a custom
+                # playlist that just got its first song with a picture.
+                if not pl.get("cover"):
+                    pl["cover"] = _fetch_cover_base64(tracks)
             _save_playlists(playlists)
+            if tracks is not None:
+                new_ids = set(_track_ids(tracks))
+                _prewarm([t for t in tracks if t.get("videoId") not in old_ids])
+                _evict(old_ids - new_ids)
             return pl
     return None
 
 
 def delete_playlist(playlist_id):
     playlists = _load_playlists()
+    removed = [pl for pl in playlists if pl["id"] == playlist_id]
     playlists = [pl for pl in playlists if pl["id"] != playlist_id]
     _save_playlists(playlists)
+    for pl in removed:
+        _evict(_track_ids(pl.get("tracks")))

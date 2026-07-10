@@ -9,3 +9,4 @@ ui/dist/
 config.yaml
 receiver/cert.pem
 receiver/key.pem
+.claude/

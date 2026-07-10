@@ -1,4 +1,5 @@
 from ytmusicapi import YTMusic
+from ytmusicapi.navigation import SINGLE_COLUMN_TAB, SECTION_LIST, nav
 
 _yt = YTMusic()
 
@@ -123,6 +124,190 @@ def get_album(browse_id):
         "audioPlaylistId": album.get("audioPlaylistId"),
         "tracks": tracks,
     }
+
+
+def _normalize_home_item(item):
+    """Normalize a single item from a get_home() row into a card the UI can
+    render and act on. Home rows mix albums/singles, playlists, songs/videos
+    and artists; we tag each with a `kind` so the frontend knows what to do
+    when it's clicked.
+    """
+    thumb = _best_thumbnail(item.get("thumbnails", []))
+    artists = [a["name"] for a in item.get("artists", []) if a.get("name")]
+
+    # Playlist card
+    if item.get("playlistId"):
+        return {
+            "kind": "playlist",
+            "playlistId": item.get("playlistId"),
+            "title": item.get("title"),
+            "subtitle": item.get("description") or ", ".join(artists),
+            "thumbnail": thumb,
+        }
+    # Song / video card
+    if item.get("videoId"):
+        return {
+            "kind": "song",
+            "videoId": item.get("videoId"),
+            "title": item.get("title"),
+            "artists": artists,
+            "subtitle": ", ".join(artists),
+            "thumbnail": thumb,
+        }
+    # Album / single card (has a browseId + audioPlaylistId)
+    if item.get("browseId") and item.get("audioPlaylistId"):
+        return {
+            "kind": "album",
+            "browseId": item.get("browseId"),
+            "title": item.get("title"),
+            "subtitle": ", ".join(artists) or item.get("type"),
+            "thumbnail": thumb,
+        }
+    # Artist card (browseId only)
+    if item.get("browseId"):
+        return {
+            "kind": "artist",
+            "browseId": item.get("browseId"),
+            "title": item.get("title"),
+            "subtitle": "Artist",
+            "thumbnail": thumb,
+        }
+    return None
+
+
+def get_home(limit=4):
+    """Return the YouTube Music home feed as normalized card rows.
+
+    Shape: [{ "title": str, "items": [normalized card, ...] }, ...]
+    """
+    rows = []
+    for row in _yt.get_home(limit=limit):
+        items = [
+            card
+            for card in (_normalize_home_item(i) for i in row.get("contents", []))
+            if card
+        ]
+        if items:
+            rows.append({"title": row.get("title"), "items": items})
+    return rows
+
+
+def get_mood_categories():
+    """Return mood/genre chips grouped by section.
+
+    Shape: [{ "title": str, "chips": [{ "title": str, "params": str }, ...] }]
+    """
+    groups = _yt.get_mood_categories()
+    return [
+        {
+            "title": section,
+            "chips": [
+                {"title": c.get("title"), "params": c.get("params")}
+                for c in chips
+                if c.get("params")
+            ],
+        }
+        for section, chips in groups.items()
+    ]
+
+
+def _runs_text(node):
+    """Join the text runs of a title/subtitle node."""
+    if not node:
+        return None
+    runs = node.get("runs") or []
+    return "".join(r.get("text", "") for r in runs) or None
+
+
+def _parse_two_row_card(item):
+    """Parse a musicTwoRowItemRenderer (playlist/album/artist card)."""
+    thumb = _best_thumbnail(
+        nav(item, ["thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails"], True) or []
+    )
+    title = _runs_text(item.get("title"))
+    subtitle = _runs_text(item.get("subtitle"))
+    endpoint = item.get("navigationEndpoint") or {}
+    browse = (endpoint.get("browseEndpoint") or {})
+    browse_id = browse.get("browseId")
+    page_type = nav(
+        browse,
+        ["browseEndpointContextSupportedConfigs", "browseEndpointContextMusicConfig", "pageType"],
+        True,
+    )
+
+    # Playlist browseIds are prefixed with "VL"; the playlistId strips it.
+    if browse_id and (page_type == "MUSIC_PAGE_TYPE_PLAYLIST" or browse_id.startswith("VL")):
+        return {
+            "kind": "playlist",
+            "playlistId": browse_id[2:] if browse_id.startswith("VL") else browse_id,
+            "title": title,
+            "subtitle": subtitle,
+            "thumbnail": thumb,
+        }
+    if page_type == "MUSIC_PAGE_TYPE_ARTIST":
+        return {"kind": "artist", "browseId": browse_id, "title": title, "subtitle": subtitle or "Artist", "thumbnail": thumb}
+    if browse_id:
+        return {"kind": "album", "browseId": browse_id, "title": title, "subtitle": subtitle, "thumbnail": thumb}
+    return None
+
+
+def _parse_responsive_song(item):
+    """Parse a musicResponsiveListItemRenderer (individual song/video row)."""
+    video_id = nav(item, ["playlistItemData", "videoId"], True) or nav(
+        item, ["flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer", "text", "runs", 0,
+                "navigationEndpoint", "watchEndpoint", "videoId"], True
+    )
+    if not video_id:
+        return None
+    title = _runs_text(nav(item, ["flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer", "text"], True))
+    subtitle = _runs_text(nav(item, ["flexColumns", 1, "musicResponsiveListItemFlexColumnRenderer", "text"], True))
+    thumb = _best_thumbnail(nav(item, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"], True) or [])
+    return {
+        "kind": "song",
+        "videoId": video_id,
+        "title": title,
+        "artists": [subtitle] if subtitle else [],
+        "subtitle": subtitle,
+        "thumbnail": thumb,
+    }
+
+
+def get_mood_playlists(params, limit=60):
+    """Return the playlists/songs for a given mood/genre chip as normalized cards.
+
+    We browse the mood page directly instead of using ytmusicapi's
+    get_mood_playlists(), which crashes (KeyError: 'musicTwoRowItemRenderer')
+    on moods whose sections mix song rows with playlist cards. Here we parse
+    each item by its renderer type and skip anything unrecognized.
+    """
+    response = _yt._send_request(
+        "browse", {"browseId": "FEmusic_moods_and_genres_category", "params": params}
+    )
+    cards = []
+    for section in nav(response, SINGLE_COLUMN_TAB + SECTION_LIST):
+        if "gridRenderer" in section:
+            items = nav(section, ["gridRenderer", "items"], True) or []
+        elif "musicCarouselShelfRenderer" in section:
+            items = nav(section, ["musicCarouselShelfRenderer", "contents"], True) or []
+        elif "musicImmersiveCarouselShelfRenderer" in section:
+            items = nav(section, ["musicImmersiveCarouselShelfRenderer", "contents"], True) or []
+        else:
+            continue
+
+        for wrapper in items:
+            try:
+                if "musicTwoRowItemRenderer" in wrapper:
+                    card = _parse_two_row_card(wrapper["musicTwoRowItemRenderer"])
+                elif "musicResponsiveListItemRenderer" in wrapper:
+                    card = _parse_responsive_song(wrapper["musicResponsiveListItemRenderer"])
+                else:
+                    continue
+            except Exception:
+                continue
+            if card and card.get("title"):
+                cards.append(card)
+
+    return cards[:limit]
 
 
 def _best_thumbnail(thumbnails):

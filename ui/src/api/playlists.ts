@@ -7,6 +7,8 @@ export interface SavedPlaylist {
   id: string
   name: string
   tracks: Track[]
+  /** base64 data URI cover, derived from the first track with a picture */
+  cover?: string | null
 }
 
 export const listPlaylists = () =>

@@ -49,6 +49,43 @@ export interface AlbumDetail {
   tracks: Track[]
 }
 
+// --- Discover ---
+
+export interface DiscoverCard {
+  kind: 'playlist' | 'song' | 'album' | 'artist'
+  title: string
+  subtitle?: string
+  thumbnail?: string
+  playlistId?: string
+  videoId?: string
+  browseId?: string
+  artists?: string[]
+}
+
+export interface HomeRow {
+  title: string
+  items: DiscoverCard[]
+}
+
+export interface MoodChip {
+  title: string
+  params: string
+}
+
+export interface MoodGroup {
+  title: string
+  chips: MoodChip[]
+}
+
+export const getHomeFeed = () =>
+  api.get<HomeRow[]>('/music/home').then(r => r.data)
+
+export const getMoodCategories = () =>
+  api.get<MoodGroup[]>('/music/moods').then(r => r.data)
+
+export const getMoodPlaylists = (params: string) =>
+  api.get<DiscoverCard[]>(`/music/moods/${encodeURIComponent(params)}`).then(r => r.data)
+
 export const searchMusic = (q: string, type: string = 'songs') =>
   api.get('/music/search', { params: { q, type } }).then(r => r.data)
 

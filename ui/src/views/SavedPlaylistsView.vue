@@ -82,6 +82,15 @@ async function onSelectSpeaker(opts: PlayOptions) {
         class="playlist-item"
         @click="router.push({ name: 'edit-playlist', params: { id: pl.id } })"
       >
+        <img
+          v-if="pl.cover"
+          :src="pl.cover"
+          class="playlist-cover"
+          alt=""
+        />
+        <div class="playlist-cover placeholder" :style="{ display: pl.cover ? 'none' : 'flex' }">
+          <i class="mdi mdi-playlist-music"></i>
+        </div>
         <div class="playlist-info">
           <div class="playlist-name">{{ pl.name }}</div>
           <div class="playlist-count">{{ pl.tracks.length }} tracks</div>
@@ -166,6 +175,23 @@ async function onSelectSpeaker(opts: PlayOptions) {
 
 .playlist-item:hover {
   background: var(--hover-bg);
+}
+
+.playlist-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.playlist-cover.placeholder {
+  background: var(--placeholder-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--placeholder-color);
+  font-size: 1.4rem;
 }
 
 .playlist-info {

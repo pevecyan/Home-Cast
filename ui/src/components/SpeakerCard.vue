@@ -31,6 +31,17 @@ const volumePercent = computed({
   set: (val: number) => emit('volumeChange', props.device, val / 100),
 })
 
+const isDraggingVolume = ref(false)
+const dragVolume = ref(0)
+
+const onVolumeSlide = (val: number | number[]) => {
+  dragVolume.value = Array.isArray(val) ? val[0] : val
+  isDraggingVolume.value = true
+}
+const onVolumeEnd = () => {
+  isDraggingVolume.value = false
+}
+
 const isPlaying = computed(() => props.state?.status === 'PLAYING')
 const isPaused = computed(() => props.state?.status === 'PAUSED')
 const isActive = computed(() => isPlaying.value || isPaused.value)
@@ -150,7 +161,24 @@ const typeIcon = computed(() =>
     <div class="speaker-controls">
       <div class="volume-row">
         <i class="mdi mdi-volume-low"></i>
-        <Slider v-model="volumePercent" :min="0" :max="100" class="volume-slider" :disabled="volumeLockEnabled && volumeLocked" />
+        <div class="volume-slider-wrap">
+          <Slider
+            v-model="volumePercent"
+            :min="0"
+            :max="100"
+            class="volume-slider"
+            :disabled="volumeLockEnabled && volumeLocked"
+            @update:model-value="onVolumeSlide"
+            @slideend="onVolumeEnd"
+          />
+          <div
+            v-if="isDraggingVolume"
+            class="volume-bubble"
+            :style="{ left: dragVolume + '%' }"
+          >
+            {{ dragVolume }}%
+          </div>
+        </div>
         <i class="mdi mdi-volume-high"></i>
         <div
           v-if="volumeLockEnabled"
@@ -402,8 +430,42 @@ const typeIcon = computed(() =>
   color: var(--p-primary-color, #6366f1);
 }
 
-.volume-slider {
+.volume-slider-wrap {
   flex: 1;
+  position: relative;
+}
+
+.volume-slider {
+  width: 100%;
+}
+
+.volume-bubble {
+  position: absolute;
+  bottom: 100%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 5px 11px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-primary, #1f2937);
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.volume-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--card-bg, #fff);
 }
 
 .button-row {
