@@ -28,32 +28,40 @@ const chipsExpanded = ref(false)
 const moodCards = ref<DiscoverCard[]>([])
 const moodLoading = ref(false)
 
-// Horizontal scroll refs per row so the arrows can nudge them
-const scrollers = ref<Record<number, HTMLElement | null>>({})
+// Horizontal scroll element per row so the arrows can nudge them.
+// NOTE: this is a plain (non-reactive) object on purpose. The template ref
+// callback runs on every render; writing to a reactive ref there — and reading
+// scrollState in the same template — creates a render→mutate→render loop that
+// freezes the tab in production (dev's recursive-update guard masks it).
+const scrollers: Record<number, HTMLElement | null> = {}
 // Per-row scroll state: whether the row overflows and which edges it's at.
 const scrollState = ref<Record<number, { overflow: boolean; atStart: boolean; atEnd: boolean }>>({})
 
+// Only stash the element during render; scroll state is computed outside the
+// render cycle (after load via nextTick, on @scroll, and on resize).
 function setScroller(i: number, el: any) {
-  scrollers.value[i] = (el as HTMLElement) ?? null
-  if (el) updateScrollState(i)
+  scrollers[i] = (el as HTMLElement) ?? null
 }
 
 function updateScrollState(i: number) {
-  const el = scrollers.value[i]
+  const el = scrollers[i]
   if (!el) return
   // 1px tolerance for sub-pixel rounding.
   const overflow = el.scrollWidth - el.clientWidth > 1
   const atStart = el.scrollLeft <= 1
   const atEnd = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
+  const prev = scrollState.value[i]
+  // Skip the write when nothing changed so we never nudge reactivity needlessly.
+  if (prev && prev.overflow === overflow && prev.atStart === atStart && prev.atEnd === atEnd) return
   scrollState.value[i] = { overflow, atStart, atEnd }
 }
 
 function updateAllScrollStates() {
-  for (const i of Object.keys(scrollers.value)) updateScrollState(Number(i))
+  for (const i of Object.keys(scrollers)) updateScrollState(Number(i))
 }
 
 function scrollRow(i: number, dir: number) {
-  const el = scrollers.value[i]
+  const el = scrollers[i]
   if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' })
 }
 
