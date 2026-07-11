@@ -6,6 +6,8 @@ const api = axios.create({ baseURL: '/api' })
 export interface SavedPlaylist {
   id: string
   name: string
+  /** original playlist author/creator, when saved from YouTube Music */
+  author?: string | null
   tracks: Track[]
   /** base64 data URI cover, derived from the first track with a picture */
   cover?: string | null
@@ -14,8 +16,8 @@ export interface SavedPlaylist {
 export const listPlaylists = () =>
   api.get<SavedPlaylist[]>('/music/playlists').then(r => r.data)
 
-export const createPlaylist = (name: string, tracks: Track[] = []) =>
-  api.post<SavedPlaylist>('/music/playlists', { name, tracks }).then(r => r.data)
+export const createPlaylist = (name: string, tracks: Track[] = [], author?: string, coverUrl?: string) =>
+  api.post<SavedPlaylist>('/music/playlists', { name, tracks, author, coverUrl }).then(r => r.data)
 
 export const getPlaylist = (id: string) =>
   api.get<SavedPlaylist>(`/music/playlists/${id}`).then(r => r.data)

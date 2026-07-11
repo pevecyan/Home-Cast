@@ -18,3 +18,6 @@ cache:
   ttl: 3600
   # Directory to store cached audio files
   dir: "./cache"
+  # How long to cache the Discover home feed & mood data (seconds), so opening
+  # Discover doesn't hit YouTube Music every time. Default 900 (15 minutes).
+  discover_ttl: 900

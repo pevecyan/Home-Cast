@@ -93,7 +93,11 @@ async function onSelectSpeaker(opts: PlayOptions) {
         </div>
         <div class="playlist-info">
           <div class="playlist-name">{{ pl.name }}</div>
-          <div class="playlist-count">{{ pl.tracks.length }} tracks</div>
+          <div class="playlist-count">
+            <span v-if="pl.author">{{ pl.author }}</span>
+            <span v-if="pl.author" class="sep">&middot;</span>
+            <span>{{ pl.tracks.length }} tracks</span>
+          </div>
         </div>
         <Button
           icon="pi pi-play"
@@ -205,6 +209,20 @@ async function onSelectSpeaker(opts: PlayOptions) {
 .playlist-count {
   font-size: 0.8rem;
   color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.playlist-count > span:not(.sep) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-count .sep {
+  flex-shrink: 0;
 }
 
 .loading,

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { volumeLockEnabled } from '../utils/settings'
 import { io, type Socket } from 'socket.io-client'
 import {
@@ -22,11 +22,12 @@ import {
   type Device,
   type DeviceState,
 } from '../api/devices'
+import { localDevice, useLocalPlayerStore } from './localPlayer'
 
 const VOLUME_LOCK_MS = 4000
 
 export const useDevicesStore = defineStore('devices', () => {
-  const devices = ref<Device[]>([])
+  const devices = ref<Device[]>([localDevice])
   const states = ref<Record<string, DeviceState>>({})
   const loading = ref(false)
   const volumeLocks: Record<string, number> = {}
@@ -36,8 +37,18 @@ export const useDevicesStore = defineStore('devices', () => {
   let socket: Socket | null = null
   let pollInterval: number | null = null
 
+  function isLocal(device: Device) {
+    return device.type === 'local'
+  }
+
+  // True once real (network) speakers have been fetched, ignoring the always-present local device.
+  const hasRealDevices = computed(() => devices.value.some(d => !isLocal(d)))
+
+  // Keep the browser pseudo-device pinned to the front; sort the rest by name.
   function sortDevices(list: Device[]) {
-    return list.sort((a, b) => a.friendly_name.localeCompare(b.friendly_name))
+    const local = list.filter(isLocal)
+    const rest = list.filter(d => !isLocal(d)).sort((a, b) => a.friendly_name.localeCompare(b.friendly_name))
+    return [...local, ...rest]
   }
 
   function applyStates(newStates: Record<string, DeviceState>) {
@@ -116,13 +127,14 @@ export const useDevicesStore = defineStore('devices', () => {
   async function fetchDevices() {
     loading.value = true
     try {
-      devices.value = sortDevices(await getDevices())
+      devices.value = sortDevices([localDevice, ...await getDevices()])
     } finally {
       loading.value = false
     }
   }
 
   async function fetchState(device: Device) {
+    if (isLocal(device)) return  // local state is client-owned
     const key = `${device.slug}:${device.type}`
     try {
       const newState = await getDeviceState(device.slug, device.type)
@@ -152,16 +164,19 @@ export const useDevicesStore = defineStore('devices', () => {
   // --- Actions ---
 
   async function pause(device: Device) {
+    if (isLocal(device)) return useLocalPlayerStore().pause()
     await pauseDevice(device.slug, device.type)
     if (!wsConnected.value) await fetchState(device)
   }
 
   async function resume(device: Device) {
+    if (isLocal(device)) return useLocalPlayerStore().resume()
     await resumeDevice(device.slug, device.type)
     if (!wsConnected.value) await fetchState(device)
   }
 
   async function togglePlayPause(device: Device) {
+    if (isLocal(device)) return useLocalPlayerStore().toggle()
     const state = getState(device)
     if (state?.status === 'PLAYING') {
       await pause(device)
@@ -171,11 +186,13 @@ export const useDevicesStore = defineStore('devices', () => {
   }
 
   async function stop(device: Device) {
+    if (isLocal(device)) return useLocalPlayerStore().stop()
     await stopDevice(device.slug, device.type)
     if (!wsConnected.value) await fetchState(device)
   }
 
   async function changeVolume(device: Device, volume: number) {
+    if (isLocal(device)) return useLocalPlayerStore().setVolume(volume)
     const key = `${device.slug}:${device.type}`
     if (volumeLocked.value[key]) return
     volumeLocks[key] = Date.now() + VOLUME_LOCK_MS
@@ -186,6 +203,7 @@ export const useDevicesStore = defineStore('devices', () => {
   }
 
   async function toggleVolumeLock(device: Device) {
+    if (isLocal(device)) return  // no volume lock for the browser
     const key = `${device.slug}:${device.type}`
     if (volumeLocked.value[key]) {
       await unlockVolume(device.slug, device.type)
@@ -212,22 +230,48 @@ export const useDevicesStore = defineStore('devices', () => {
   })
 
   async function next(device: Device) {
+    if (isLocal(device)) return useLocalPlayerStore().next()
     await nextTrack(device.slug, device.type)
   }
 
   async function prev(device: Device) {
+    if (isLocal(device)) return useLocalPlayerStore().prev()
     await prevTrack(device.slug, device.type)
   }
 
   async function jumpToTrack(device: Device, index: number) {
+    if (isLocal(device)) return useLocalPlayerStore().jumpTo(index)
     await playTrackAt(device.slug, index)
   }
 
   async function transfer(fromDevice: Device, toDevice: Device) {
+    const local = useLocalPlayerStore()
+    // Speaker → browser: pull the source queue from its live state.
+    if (isLocal(toDevice)) {
+      const state = getState(fromDevice)
+      const q = state?.queue
+      if (q && q.tracks.length) {
+        await stop(fromDevice)
+        local.play(q.tracks, q.currentIndex, { repeat: q.repeat })
+      }
+      return
+    }
+    // Browser → speaker: hand off the local queue, then stop local audio.
+    if (isLocal(fromDevice)) {
+      const snap = local.snapshot()
+      if (snap.tracks.length) {
+        const { playTracksOn } = await import('../api/music')
+        await playTracksOn(toDevice.slug, toDevice.type, snap.tracks, snap.currentIndex, snap.repeat)
+      }
+      local.stop()
+      if (!wsConnected.value) await fetchState(toDevice)
+      return
+    }
     await transferQueue(fromDevice.slug, toDevice.slug, toDevice.type)
   }
 
   async function cycleRepeat(device: Device) {
+    if (isLocal(device)) return useLocalPlayerStore().cycleRepeat()
     const state = getState(device)
     const current = state?.queue?.repeat ?? 'off'
     const next = current === 'off' ? 'all' : current === 'all' ? 'one' : 'off'
@@ -236,6 +280,7 @@ export const useDevicesStore = defineStore('devices', () => {
   }
 
   async function setSleep(device: Device, minutes: number) {
+    if (isLocal(device)) return  // sleep timer not supported for the browser
     await setSleepTimer(device.slug, device.type, minutes)
     if (!wsConnected.value) await fetchState(device)
   }
@@ -245,7 +290,7 @@ export const useDevicesStore = defineStore('devices', () => {
   async function refresh() {
     refreshing.value = true
     try {
-      devices.value = sortDevices(await refreshDevices())
+      devices.value = sortDevices([localDevice, ...await refreshDevices()])
       await fetchAllStates()
     } finally {
       refreshing.value = false
@@ -263,6 +308,7 @@ export const useDevicesStore = defineStore('devices', () => {
     loading,
     refreshing,
     wsConnected,
+    hasRealDevices,
     fetchDevices,
     fetchState,
     fetchAllStates,

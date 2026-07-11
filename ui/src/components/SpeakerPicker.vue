@@ -4,15 +4,21 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import { useDevicesStore } from '../stores/devices'
 import type { Device } from '../api/devices'
+import { deviceIcon } from '../utils/deviceIcon'
 
 const props = withDefaults(defineProps<{
   visible: boolean
   showPlayOptions?: boolean
   forceShuffle?: boolean
+  excludeSlug?: string
 }>(), {
   showPlayOptions: true,
   forceShuffle: false,
 })
+
+const pickableDevices = computed(() =>
+  devicesStore.devices.filter(d => d.slug !== props.excludeSlug),
+)
 
 watch(() => props.visible, (open) => {
   if (open && props.forceShuffle) {
@@ -114,16 +120,16 @@ function onSelect(device: Device) {
     </div>
 
     <div class="speaker-list">
-      <div v-if="!devicesStore.devices.length" class="empty">
+      <div v-if="!pickableDevices.length" class="empty">
         No speakers found
       </div>
       <button
-        v-for="device in devicesStore.devices"
+        v-for="device in pickableDevices"
         :key="`${device.slug}:${device.type}`"
         class="speaker-option"
         @click="onSelect(device)"
       >
-        <i :class="device.type === 'sonos' ? 'mdi mdi-speaker' : 'mdi mdi-cast-audio'"></i>
+        <i :class="deviceIcon(device.type)"></i>
         <div>
           <div class="option-name">{{ device.friendly_name }}</div>
           <div class="option-type">{{ device.type }}</div>

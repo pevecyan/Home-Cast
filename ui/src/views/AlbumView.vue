@@ -64,7 +64,7 @@ async function toggleFavorite() {
     if (isFavorited.value && savedMatch.value) {
       await deletePlaylist(savedMatch.value.id)
     } else {
-      await createPlaylist(album.value.title, album.value.tracks)
+      await createPlaylist(album.value.title, album.value.tracks, album.value.artists?.join(', '), album.value.thumbnail)
     }
     await loadSavedPlaylists()
   } finally {
@@ -182,7 +182,7 @@ async function onSelectSpeaker(opts: PlayOptions) {
 
       <!-- Track list -->
       <div class="tracks-section">
-        <TrackList :tracks="album.tracks" :numbered="true" @play="onPlayTrack" @add-to-playlist="onAddToPlaylist" />
+        <TrackList :tracks="album.tracks" :numbered="true" :fallback-cover="album.thumbnail" @play="onPlayTrack" @add-to-playlist="onAddToPlaylist" />
       </div>
     </template>
 

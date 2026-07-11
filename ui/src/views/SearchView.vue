@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import SearchBar from '../components/SearchBar.vue'
 import TrackList from '../components/TrackList.vue'
 import SpeakerPicker from '../components/SpeakerPicker.vue'
@@ -14,6 +14,7 @@ import type { PlayOptions } from '../components/SpeakerPicker.vue'
 import AddToPlaylist from '../components/AddToPlaylist.vue'
 
 const router = useRouter()
+const route = useRoute()
 const player = usePlayerStore()
 const devicesStore = useDevicesStore()
 const recent = useRecentStore()
@@ -33,13 +34,44 @@ const showDiscover = computed(() => !searched.value && !loading.value)
 
 devicesStore.fetchDevices()
 
+// Restore the active search from the URL (?q=&type=) so returning here via the
+// browser back button — e.g. after opening a result — shows the results again
+// instead of resetting to Discover.
+onMounted(() => {
+  const q = (route.query.q as string) || ''
+  const type = (route.query.type as string) || 'songs'
+  if (q.trim()) {
+    query.value = q
+    filterType.value = type
+    runSearch(q.trim(), type)
+  }
+})
+
 watch(filterType, () => {
   if (query.value.trim()) {
     onSearch(query.value.trim(), filterType.value)
   }
 })
 
-async function onSearch(q: string, type: string) {
+// Clearing the search box returns to the Discover view and drops the URL query.
+watch(query, (q) => {
+  if (!q.trim() && searched.value) {
+    searched.value = false
+    results.value = []
+    if (route.query.q) router.replace({ name: 'discover', query: {} })
+  }
+})
+
+// User-initiated search: reflect it in the URL, then fetch.
+function onSearch(q: string, type: string) {
+  const current = route.query
+  if (current.q !== q || current.type !== type) {
+    router.replace({ name: 'discover', query: { q, type } })
+  }
+  return runSearch(q, type)
+}
+
+async function runSearch(q: string, type: string) {
   loading.value = true
   searched.value = true
   try {

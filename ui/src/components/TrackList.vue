@@ -2,16 +2,31 @@
 import type { Track } from '../api/music'
 import { onImgError } from '../utils/imgFallback'
 
-defineProps<{
+const props = defineProps<{
   tracks: Track[]
   loading?: boolean
   numbered?: boolean
+  /** Cover to fall back to when a track has no / a broken thumbnail (e.g. album art). */
+  fallbackCover?: string
 }>()
 
 const emit = defineEmits<{
   play: [track: Track]
   addToPlaylist: [track: Track]
 }>()
+
+// When a track's own thumbnail fails, fall back to the shared cover once,
+// then to the static placeholder.
+function onTrackImgError(e: Event) {
+  const img = e.target as HTMLImageElement
+  const cover = props.fallbackCover
+  if (cover && !img.dataset.coverTried && img.src !== cover) {
+    img.dataset.coverTried = '1'
+    img.src = cover
+    return
+  }
+  onImgError(e)
+}
 </script>
 
 <template>
@@ -29,13 +44,13 @@ const emit = defineEmits<{
       <span v-if="numbered" class="track-num">{{ idx + 1 }}</span>
       <div class="track-thumb-wrap">
         <img
-          v-if="track.thumbnail"
-          :src="track.thumbnail"
+          v-if="track.thumbnail || fallbackCover"
+          :src="track.thumbnail || fallbackCover || ''"
           class="track-thumb"
           alt=""
-          @error="onImgError"
+          @error="onTrackImgError"
         />
-        <div class="track-thumb placeholder img-fallback" :style="{ display: track.thumbnail ? 'none' : 'flex' }">
+        <div class="track-thumb placeholder img-fallback" :style="{ display: (track.thumbnail || fallbackCover) ? 'none' : 'flex' }">
           <i class="mdi mdi-music-note"></i>
         </div>
         <div class="track-play-overlay">

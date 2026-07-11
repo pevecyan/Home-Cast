@@ -9,6 +9,9 @@ _defaults = {
     "cache": {
         "ttl": 3600,
         "dir": "./cache",
+        # How long to cache the Discover home feed & mood data (seconds) so we
+        # don't hit YouTube Music on every Discover open. Default 15 minutes.
+        "discover_ttl": 900,
     },
 }
 
@@ -31,4 +34,6 @@ def load_config(path="config.yaml"):
         config["port"] = int(os.environ["APP_PORT"])
     if os.environ.get("APP_CACHE_DIR"):
         config["cache"]["dir"] = os.environ["APP_CACHE_DIR"]
+    if os.environ.get("APP_DISCOVER_TTL"):
+        config["cache"]["discover_ttl"] = int(os.environ["APP_DISCOVER_TTL"])
     return config

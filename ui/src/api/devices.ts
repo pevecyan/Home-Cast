@@ -3,7 +3,7 @@ import axios from 'axios'
 const api = axios.create({ baseURL: '/api' })
 
 export interface Device {
-  type: 'chromecast' | 'sonos'
+  type: 'chromecast' | 'sonos' | 'local'
   friendly_name: string
   slug: string
   host: string

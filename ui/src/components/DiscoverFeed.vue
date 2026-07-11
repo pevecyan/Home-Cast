@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import {
   getHomeFeed,
   getMoodCategories,
@@ -9,6 +9,7 @@ import {
   type MoodChip,
   type DiscoverCard,
 } from '../api/music'
+import Button from 'primevue/button'
 import { onImgError } from '../utils/imgFallback'
 
 const emit = defineEmits<{
@@ -18,6 +19,7 @@ const emit = defineEmits<{
 const rows = ref<HomeRow[]>([])
 const moodGroups = ref<MoodGroup[]>([])
 const loading = ref(false)
+const refreshing = ref(false)
 const error = ref(false)
 
 // Selected mood chip (null = home feed)
@@ -28,29 +30,62 @@ const moodLoading = ref(false)
 
 // Horizontal scroll refs per row so the arrows can nudge them
 const scrollers = ref<Record<number, HTMLElement | null>>({})
+// Per-row scroll state: whether the row overflows and which edges it's at.
+const scrollState = ref<Record<number, { overflow: boolean; atStart: boolean; atEnd: boolean }>>({})
+
 function setScroller(i: number, el: any) {
   scrollers.value[i] = (el as HTMLElement) ?? null
+  if (el) updateScrollState(i)
 }
+
+function updateScrollState(i: number) {
+  const el = scrollers.value[i]
+  if (!el) return
+  // 1px tolerance for sub-pixel rounding.
+  const overflow = el.scrollWidth - el.clientWidth > 1
+  const atStart = el.scrollLeft <= 1
+  const atEnd = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
+  scrollState.value[i] = { overflow, atStart, atEnd }
+}
+
+function updateAllScrollStates() {
+  for (const i of Object.keys(scrollers.value)) updateScrollState(Number(i))
+}
+
 function scrollRow(i: number, dir: number) {
   const el = scrollers.value[i]
   if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' })
 }
 
-async function loadHome() {
-  loading.value = true
+async function loadHome(force = false) {
+  // Only show the full-page spinner on the initial load, not on a forced
+  // refresh (the button shows its own spinner and existing content stays).
+  if (force) refreshing.value = true
+  else loading.value = true
   error.value = false
   try {
     const [home, moods] = await Promise.all([
-      getHomeFeed(),
-      getMoodCategories().catch(() => [] as MoodGroup[]),
+      getHomeFeed(force),
+      getMoodCategories(force).catch(() => [] as MoodGroup[]),
     ])
     rows.value = home
     moodGroups.value = moods
+    // If a mood chip is open, refresh its cards too.
+    if (force && activeChip.value) {
+      moodCards.value = await getMoodPlaylists(activeChip.value.params, true).catch(() => moodCards.value)
+    }
+    await nextTick()
+    updateAllScrollStates()
   } catch {
-    error.value = true
+    if (!force) error.value = true
   } finally {
     loading.value = false
+    refreshing.value = false
   }
+}
+
+function refresh() {
+  loadHome(true)
 }
 
 async function selectChip(chip: MoodChip | null) {
@@ -85,13 +120,32 @@ function iconFor(kind: string) {
   return 'mdi mdi-playlist-music'
 }
 
-onMounted(loadHome)
+onMounted(() => {
+  loadHome()
+  window.addEventListener('resize', updateAllScrollStates)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateAllScrollStates)
+})
 
-defineExpose({ reload: loadHome })
+defineExpose({ reload: refresh })
 </script>
 
 <template>
   <div class="discover">
+    <!-- Refresh Discover (bypasses the server cache) -->
+    <div class="discover-toolbar">
+      <Button
+        icon="pi pi-refresh"
+        rounded
+        text
+        size="small"
+        :loading="refreshing"
+        title="Refresh discover"
+        @click="refresh"
+      />
+    </div>
+
     <!-- Mood / genre chips -->
     <div v-if="allChips().length" class="chips-wrap">
       <div class="chips" :class="{ expanded: chipsExpanded }">
@@ -120,7 +174,7 @@ defineExpose({ reload: loadHome })
     <div v-else-if="error" class="empty-state">
       <i class="mdi mdi-cloud-off-outline"></i>
       <p>Couldn't load discover feed</p>
-      <button class="retry" @click="loadHome">Retry</button>
+      <button class="retry" @click="loadHome()">Retry</button>
     </div>
 
     <!-- Selected mood: a single grid of playlists -->
@@ -156,12 +210,12 @@ defineExpose({ reload: loadHome })
       <section v-for="(row, i) in rows" :key="row.title" class="feed-row">
         <div class="row-header">
           <h2 class="row-title">{{ row.title }}</h2>
-          <div class="row-nav">
-            <button class="nav-btn" @click="scrollRow(i, -1)"><i class="mdi mdi-chevron-left"></i></button>
-            <button class="nav-btn" @click="scrollRow(i, 1)"><i class="mdi mdi-chevron-right"></i></button>
+          <div v-if="scrollState[i]?.overflow" class="row-nav">
+            <button class="nav-btn" :disabled="scrollState[i]?.atStart" @click="scrollRow(i, -1)"><i class="mdi mdi-chevron-left"></i></button>
+            <button class="nav-btn" :disabled="scrollState[i]?.atEnd" @click="scrollRow(i, 1)"><i class="mdi mdi-chevron-right"></i></button>
           </div>
         </div>
-        <div class="row-scroller" :ref="el => setScroller(i, el)">
+        <div class="row-scroller" :ref="el => setScroller(i, el)" @scroll="updateScrollState(i)">
           <div
             v-for="(card, j) in row.items"
             :key="`${card.kind}:${card.playlistId || card.videoId || card.browseId}:${j}`"
@@ -192,6 +246,12 @@ defineExpose({ reload: loadHome })
   margin-top: 8px;
   min-width: 0;
   max-width: 100%;
+}
+
+.discover-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
 }
 
 /* Chips */
@@ -283,7 +343,8 @@ defineExpose({ reload: loadHome })
   justify-content: center;
   transition: background 0.15s;
 }
-.nav-btn:hover { background: var(--hover-bg); }
+.nav-btn:hover:not(:disabled) { background: var(--hover-bg); }
+.nav-btn:disabled { opacity: 0.35; cursor: default; }
 .nav-btn i { font-size: 1.2rem; }
 
 .row-scroller {
