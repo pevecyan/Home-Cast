@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: ghcr.io/pevecyan/home-cast:1.5.0
+    image: ghcr.io/pevecyan/home-cast:1.5.1
     container_name: home-cast
     network_mode: "host"
     environment:

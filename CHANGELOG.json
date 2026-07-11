@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.5.1",
+    "date": "2026-07-11",
+    "changes": [
+      "Fixed the Discover tab freezing the browser in production — a render loop in the feed's scroll-position tracking spun the main thread (masked in development by Vue's recursive-update guard)"
+    ]
+  },
+  {
     "version": "1.5.0",
     "date": "2026-07-11",
     "changes": [

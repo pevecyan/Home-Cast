@@ -24,6 +24,9 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 
 ## Changelog
 
+### v1.5.1 — 2026-07-11
+- Fixed the Discover tab freezing the browser in production — a render loop in the feed's scroll-position tracking spun the main thread (masked in development by Vue's recursive-update guard)
+
 ### v1.5.0 — 2026-07-11
 - **Local play**: your browser is now a speaker — pick **This device** to play music directly in the browser/phone alongside Chromecast and Sonos
 - Transfer playback between the browser and any speaker **in both directions**, keeping the queue and current track
