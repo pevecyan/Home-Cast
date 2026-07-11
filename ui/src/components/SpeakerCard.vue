@@ -6,6 +6,7 @@ import SpeakerPicker from './SpeakerPicker.vue'
 import type { Device, DeviceState } from '../api/devices'
 import { onImgError } from '../utils/imgFallback'
 import { sleepEnabled, volumeLockEnabled } from '../utils/settings'
+import { deviceIcon } from '../utils/deviceIcon'
 
 const props = defineProps<{
   device: Device
@@ -69,9 +70,8 @@ const sleepOptions = [15, 30, 45, 60]
 const showPlaylist = ref(false)
 const showTransferPicker = ref(false)
 
-const typeIcon = computed(() =>
-  props.device.type === 'sonos' ? 'mdi mdi-speaker' : 'mdi mdi-cast-audio'
-)
+const typeIcon = computed(() => deviceIcon(props.device.type))
+const isLocal = computed(() => props.device.type === 'local')
 </script>
 
 <template>
@@ -84,7 +84,7 @@ const typeIcon = computed(() =>
           <div class="speaker-type">{{ device.type }}</div>
         </div>
       </div>
-      <div v-if="isActive && sleepEnabled" class="sleep-wrapper">
+      <div v-if="isActive && sleepEnabled && !isLocal" class="sleep-wrapper">
         <div class="sleep-icon-btn" :class="{ active: !!sleepTimer }" @click="showSleepMenu = !showSleepMenu">
           <i class="mdi mdi-power-sleep"></i>
           <span v-if="sleepRemaining" class="sleep-remaining">{{ sleepRemaining }}</span>
@@ -181,7 +181,7 @@ const typeIcon = computed(() =>
         </div>
         <i class="mdi mdi-volume-high"></i>
         <div
-          v-if="volumeLockEnabled"
+          v-if="volumeLockEnabled && !isLocal"
           class="volume-lock-btn"
           :class="{ 'mode-active': volumeLocked }"
           @click="$emit('toggleVolumeLock', device)"
@@ -232,6 +232,7 @@ const typeIcon = computed(() =>
       <SpeakerPicker
         v-model:visible="showTransferPicker"
         :show-play-options="false"
+        :exclude-slug="device.slug"
         @select="({ device: target }) => { $emit('transfer', device, target); showTransferPicker = false }"
       />
 

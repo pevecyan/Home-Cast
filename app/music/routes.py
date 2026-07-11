@@ -1,3 +1,4 @@
+import time
 import logging
 import threading
 
@@ -11,6 +12,51 @@ from app.music.downloader import get_cache
 from app.devices import chromecast, sonos
 
 music_bp = Blueprint("music", __name__, url_prefix="/music")
+
+
+# --- Discover cache (home feed + moods) ---
+# YouTube Music is slow and rate-limited; cache these read-only feeds so we
+# don't re-fetch on every Discover open. TTL comes from config (cache.discover_ttl).
+_discover_cache = {}          # key -> (expiry_epoch, value)
+_discover_locks = {}          # key -> Lock (de-duplicate concurrent misses)
+_discover_guard = threading.Lock()
+
+
+def _discover_ttl():
+    return current_app.config["APP"]["cache"].get("discover_ttl", 900)
+
+
+def _cached_discover(key, fetch, force=False):
+    """Return a cached value for `key`, or call `fetch()` and cache it.
+
+    Single-flight per key so a burst of Discover opens triggers one YT request.
+    Failures are not cached (they propagate so the caller can retry).
+    When `force` is True, bypass any cached value and re-fetch (used by the
+    Discover refresh button).
+    """
+    now = time.time()
+    if not force:
+        entry = _discover_cache.get(key)
+        if entry and now < entry[0]:
+            return entry[1]
+
+    with _discover_guard:
+        lock = _discover_locks.setdefault(key, threading.Lock())
+
+    with lock:
+        # Re-check: another thread may have populated it while we waited
+        # (skip the shortcut on a forced refresh).
+        if not force:
+            entry = _discover_cache.get(key)
+            if entry and time.time() < entry[0]:
+                return entry[1]
+        value = fetch()
+        _discover_cache[key] = (time.time() + _discover_ttl(), value)
+        return value
+
+
+def _force_refresh():
+    return request.args.get("refresh") in ("1", "true", "yes")
 
 
 # --- Search ---
@@ -33,7 +79,7 @@ def search_music():
 def home_feed():
     """YouTube Music home feed: rows of playlist/album/song/artist cards."""
     try:
-        return jsonify(ytmusic.get_home())
+        return jsonify(_cached_discover("home", ytmusic.get_home, force=_force_refresh()))
     except Exception as e:
         logger.exception("Failed to fetch home feed")
         return jsonify({"error": str(e)}), 502
@@ -43,7 +89,7 @@ def home_feed():
 def mood_categories():
     """Mood/genre chips shown at the top of Discover."""
     try:
-        return jsonify(ytmusic.get_mood_categories())
+        return jsonify(_cached_discover("moods", ytmusic.get_mood_categories, force=_force_refresh()))
     except Exception as e:
         logger.exception("Failed to fetch mood categories")
         return jsonify({"error": str(e)}), 502
@@ -53,7 +99,7 @@ def mood_categories():
 def mood_playlists(params):
     """Playlists for a selected mood/genre chip."""
     try:
-        return jsonify(ytmusic.get_mood_playlists(params))
+        return jsonify(_cached_discover(f"moods:{params}", lambda: ytmusic.get_mood_playlists(params), force=_force_refresh()))
     except Exception as e:
         logger.exception("Failed to fetch mood playlists")
         return jsonify({"error": str(e)}), 502
@@ -114,16 +160,32 @@ def play():
     device_type = data.get("type", "chromecast")
     video_id = data.get("videoId")
     playlist_id = data.get("playlistId")
+    track_list = data.get("tracks")  # explicit ordered track list (e.g. handoff from local browser play)
+    start_index = data.get("startIndex", 0)
     shuffle = data.get("shuffle", False)
     repeat = data.get("repeat", "off")
 
     if not slug:
         return jsonify({"error": "Missing 'slug'"}), 400
-    if not video_id and not playlist_id:
-        return jsonify({"error": "Provide 'videoId' or 'playlistId'"}), 400
+    if not video_id and not playlist_id and not track_list:
+        return jsonify({"error": "Provide 'videoId', 'playlistId', or 'tracks'"}), 400
 
     # resolve tracks
-    if video_id:
+    if track_list:
+        tracks = [{
+            "videoId": t.get("videoId"),
+            "title": t.get("title"),
+            "artists": t.get("artists", []),
+            "album": t.get("album"),
+            "thumbnail": t.get("thumbnail"),
+            "duration": t.get("duration"),
+        } for t in track_list if t.get("videoId")]
+        if not tracks:
+            return jsonify({"error": "No playable tracks"}), 400
+        # Rotate so the requested start track plays first (queue order preserved after it).
+        if 0 < start_index < len(tracks):
+            tracks = tracks[start_index:] + tracks[:start_index]
+    elif video_id:
         track_meta = data.get("track") or {}
         tracks = [{
             "videoId": video_id,
@@ -288,7 +350,9 @@ def create_playlist():
     data = request.json
     name = data.get("name", "Untitled")
     tracks = data.get("tracks", [])
-    result = pl.create_playlist(name, tracks)
+    author = data.get("author")
+    cover_url = data.get("coverUrl")
+    result = pl.create_playlist(name, tracks, author=author, cover_url=cover_url)
     return jsonify(result), 201
 
 

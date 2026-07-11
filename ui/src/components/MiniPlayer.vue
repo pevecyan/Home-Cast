@@ -3,6 +3,10 @@ import { computed, ref } from 'vue'
 import { useDevicesStore } from '../stores/devices'
 import { usePlayerStore } from '../stores/player'
 import { onImgError } from '../utils/imgFallback'
+import { deviceIcon } from '../utils/deviceIcon'
+import type { Device } from '../api/devices'
+
+const emit = defineEmits<{ open: [device: Device] }>()
 
 const devicesStore = useDevicesStore()
 const playerStore = usePlayerStore()
@@ -45,9 +49,7 @@ const trackThumb = computed(() =>
 
 const isPlaying = computed(() => currentState.value?.status === 'PLAYING')
 
-const typeIcon = computed(() =>
-  currentDevice.value?.type === 'sonos' ? 'mdi mdi-speaker' : 'mdi mdi-cast-audio'
-)
+const typeIcon = computed(() => deviceIcon(currentDevice.value?.type))
 
 
 function togglePlayPause() {
@@ -116,8 +118,8 @@ function onTouchEnd(e: TouchEvent) {
       <i class="mdi mdi-music-note"></i>
     </div>
 
-    <!-- Two-line info: speaker on top, track below -->
-    <div class="mini-info">
+    <!-- Two-line info: speaker on top, track below. Tap to open Now Playing. -->
+    <div class="mini-info" @click="currentDevice && emit('open', currentDevice)" role="button" tabindex="0" title="Open now playing">
       <div class="mini-speaker">
         <i :class="typeIcon" class="mini-speaker-icon"></i>
         <span class="mini-speaker-name">{{ currentDevice?.friendly_name }}</span>
@@ -221,6 +223,7 @@ function onTouchEnd(e: TouchEvent) {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  cursor: pointer;
 }
 
 .mini-speaker {

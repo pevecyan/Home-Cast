@@ -4,18 +4,37 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 
 ## Features
 
-- **Multi-device support** — Chromecast (audio & video) and Sonos
+- **Multi-device support** — Chromecast (audio & video), Sonos, and **local play** (your browser/phone as a speaker)
 - **YouTube Music** — search songs, artists, albums, playlists; play with automatic queuing and background download
+- **Discover** — YouTube Music home feed and mood/genre browsing, cached for instant loads
 - **Radio** — search via Radio Browser API, play live streams
-- **Saved playlists** — create and manage local playlists
-- **Queue** — shuffle, repeat (off / all / one), next / prev, sleep timer, playlist browser, transfer to another speaker
+- **Saved playlists** — create and manage local playlists, with author and cover art
+- **Now Playing** — full-screen view with album art, scrubbable progress (local play), and the upcoming queue
+- **Queue** — shuffle, repeat (off / all / one), next / prev, sleep timer, playlist browser, transfer to another speaker (or the browser)
 - **Notification sound** — interrupt playback with a sound clip, then resume from the same position
+- **Installable PWA** — add to your home screen with an offline-ready app shell
 - **Real-time UI** — WebSocket state updates every 3 seconds
 - **Mobile-friendly** Vue 3 + PrimeVue UI
 
-<img width="1475" height="1151" alt="image" src="https://github.com/user-attachments/assets/543766eb-a5e1-45a0-b6a0-4b1c1370e7cb" />
+<p align="center">
+  <img src="docs/screenshots/speakers.png" alt="Speakers dashboard with local play and Chromecast groups" width="32%" />
+  <img src="docs/screenshots/now-playing.png" alt="Full-screen Now Playing view with album art and queue" width="32%" />
+  <img src="docs/screenshots/discover.png" alt="Discover feed with home rows and mood chips" width="32%" />
+</p>
 
 ## Changelog
+
+### v1.5.0 — 2026-07-11
+- **Local play**: your browser is now a speaker — pick **This device** to play music directly in the browser/phone alongside Chromecast and Sonos
+- Transfer playback between the browser and any speaker **in both directions**, keeping the queue and current track
+- New full-screen **Now Playing** view with album art, a scrubbable progress bar (local play), volume, and the upcoming queue
+- **Installable PWA**: add Home Cast to your home screen with an app icon and offline-ready app shell
+- Discover feed and mood data are **cached** (default 15 min, configurable via `cache.discover_ttl`) and pre-warmed on app open, so opening Discover is instant instead of hitting YouTube Music every time
+- **Refresh** button on Discover to force-reload the home feed and moods, bypassing the cache
+- Missing/broken song cover art now falls back to the album or playlist cover
+- Saved playlists now store the **author** and **cover**, shown on the playlist list and detail views
+- Saving a playlist keeps the cover you saw (album/playlist artwork), stored as base64 so it loads without re-fetching
+- Search now remembers your query in the URL, so the **back button** returns you to your results instead of Discover
 
 ### v1.4.1 — 2026-07-11
 - Fixed saved-playlist pre-warm spawning one download per track at startup, which could launch dozens of concurrent `yt-dlp`/`ffmpeg` processes and exhaust host memory (crashing Docker on low-RAM servers/NAS)
@@ -87,8 +106,9 @@ hostname: "http://192.168.1.100:5000"   # LAN IP — speakers must reach this
 port: 5000
 cast_app_id: "87584FFE"                 # custom Chromecast receiver app ID
 cache:
-  ttl: 3600       # seconds to keep downloaded audio
+  ttl: 3600           # seconds to keep downloaded audio
   dir: "./cache"
+  discover_ttl: 900   # seconds to cache the Discover feed & moods (default 15 min)
 ```
 
 > **Important:** `hostname` must be the LAN IP/hostname of your server, not `localhost`. Chromecast and Sonos devices fetch audio files directly from this URL.

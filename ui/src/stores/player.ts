@@ -1,13 +1,22 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { playSong, playPlaylist, type Track } from '../api/music'
-import { playSavedPlaylist } from '../api/playlists'
+import { playSong, playPlaylist, getPlaylist as getYtPlaylist, type Track } from '../api/music'
+import { playSavedPlaylist, getPlaylist as getSavedPlaylist } from '../api/playlists'
 import type { Device } from '../api/devices'
 import { useRecentStore } from './recent'
+import { useLocalPlayerStore } from './localPlayer'
 
 export interface PlayOpts {
   shuffle?: boolean
   repeat?: string
+}
+
+// Local play reads track.thumbnail directly for Now Playing + queue art, so
+// give any track without its own thumbnail the playlist/album cover as a
+// fallback (e.g. the stored base64 cover of a saved playlist).
+function withFallbackCover(tracks: Track[], cover?: string | null): Track[] {
+  if (!cover) return tracks
+  return tracks.map(t => (t.thumbnail ? t : { ...t, thumbnail: cover }))
 }
 
 export const usePlayerStore = defineStore('player', () => {
@@ -21,7 +30,11 @@ export const usePlayerStore = defineStore('player', () => {
     currentTrack.value = track
     currentDevice.value = device
     try {
-      await playSong(device.slug, device.type, track.videoId, opts.shuffle, opts.repeat, track)
+      if (device.type === 'local') {
+        useLocalPlayerStore().play([track], 0, { shuffle: opts.shuffle, repeat: (opts.repeat as any) ?? 'off' })
+      } else {
+        await playSong(device.slug, device.type, track.videoId, opts.shuffle, opts.repeat, track)
+      }
       isPlaying.value = true
       useRecentStore().add({
         type: 'song',
@@ -39,7 +52,13 @@ export const usePlayerStore = defineStore('player', () => {
     isLoading.value = true
     currentDevice.value = device
     try {
-      await playPlaylist(device.slug, device.type, playlistId, opts.shuffle, opts.repeat)
+      if (device.type === 'local') {
+        const detail = await getYtPlaylist(playlistId)
+        const tracks = withFallbackCover(detail.tracks, detail.thumbnail)
+        useLocalPlayerStore().play(tracks, 0, { shuffle: opts.shuffle, repeat: (opts.repeat as any) ?? 'off' })
+      } else {
+        await playPlaylist(device.slug, device.type, playlistId, opts.shuffle, opts.repeat)
+      }
       isPlaying.value = true
       if (meta?.title) {
         useRecentStore().add({
@@ -59,7 +78,13 @@ export const usePlayerStore = defineStore('player', () => {
     isLoading.value = true
     currentDevice.value = device
     try {
-      await playSavedPlaylist(playlistId, device.slug, device.type, opts.shuffle, opts.repeat)
+      if (device.type === 'local') {
+        const detail = await getSavedPlaylist(playlistId)
+        const tracks = withFallbackCover(detail.tracks, detail.cover)
+        useLocalPlayerStore().play(tracks, 0, { shuffle: opts.shuffle, repeat: (opts.repeat as any) ?? 'off' })
+      } else {
+        await playSavedPlaylist(playlistId, device.slug, device.type, opts.shuffle, opts.repeat)
+      }
       isPlaying.value = true
       if (meta?.title) {
         useRecentStore().add({

@@ -127,12 +127,12 @@ function onVolumeChange(device: Device, volume: number) {
       <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
     </div>
 
-    <div v-else-if="!store.devices.length" class="empty">
+    <div v-else-if="!store.hasRealDevices" class="empty">
       <i class="mdi mdi-speaker-off" style="font-size: 3rem; color: var(--placeholder-color)"></i>
-      <p>No speakers found on the network</p>
+      <p>No speakers found on the network — you can still play on this device.</p>
     </div>
 
-    <template v-else>
+    <template v-if="!store.loading">
       <!-- Active speakers -->
       <div v-if="activeSpeakers.length" class="speakers-grid active-section">
         <template v-for="device in activeSpeakers" :key="`${device.slug}:${device.type}`">

@@ -15,29 +15,41 @@ _COVER_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
 _COVER_TIMEOUT = 10  # seconds
 
 
-def _fetch_cover_base64(tracks):
-    """Return a base64 data URI for the first track that has a fetchable
-    thumbnail, or None. For custom playlists this naturally uses the first
-    song we can get a picture of.
+def _fetch_image_as_data_uri(url):
+    """Download an image URL and return a base64 data URI, or None on failure."""
+    if not url:
+        return None
+    try:
+        resp = requests.get(url, timeout=_COVER_TIMEOUT)
+        resp.raise_for_status()
+        content = resp.content
+        if not content or len(content) > _COVER_MAX_BYTES:
+            return None
+        mime = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+        if not mime.startswith("image/"):
+            mime = "image/jpeg"
+        encoded = base64.b64encode(content).decode("ascii")
+        return f"data:{mime};base64,{encoded}"
+    except Exception as e:
+        logger.debug("Failed to fetch cover from %s: %s", url, e)
+        return None
+
+
+def _fetch_cover_base64(tracks, cover_url=None):
+    """Return a base64 data URI for the playlist cover, or None.
+
+    Prefers an explicit ``cover_url`` (e.g. the album/playlist artwork the user
+    saw when saving), then falls back to the first track with a fetchable
+    thumbnail — which is what custom playlists rely on.
     """
+    if cover_url:
+        cover = _fetch_image_as_data_uri(cover_url)
+        if cover:
+            return cover
     for track in tracks or []:
-        url = track.get("thumbnail")
-        if not url:
-            continue
-        try:
-            resp = requests.get(url, timeout=_COVER_TIMEOUT)
-            resp.raise_for_status()
-            content = resp.content
-            if not content or len(content) > _COVER_MAX_BYTES:
-                continue
-            mime = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
-            if not mime.startswith("image/"):
-                mime = "image/jpeg"
-            encoded = base64.b64encode(content).decode("ascii")
-            return f"data:{mime};base64,{encoded}"
-        except Exception as e:
-            logger.debug("Failed to fetch cover from %s: %s", url, e)
-            continue
+        cover = _fetch_image_as_data_uri(track.get("thumbnail"))
+        if cover:
+            return cover
     return None
 
 
@@ -135,14 +147,15 @@ def _evict(video_ids):
         logger.exception("Failed to evict orphaned tracks")
 
 
-def create_playlist(name, tracks=None):
+def create_playlist(name, tracks=None, author=None, cover_url=None):
     playlists = _load_playlists()
     tracks = tracks or []
     pl = {
         "id": str(uuid.uuid4()),
         "name": name,
+        "author": author,
         "tracks": tracks,
-        "cover": _fetch_cover_base64(tracks),
+        "cover": _fetch_cover_base64(tracks, cover_url=cover_url),
     }
     playlists.append(pl)
     _save_playlists(playlists)

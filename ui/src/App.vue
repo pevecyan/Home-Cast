@@ -3,12 +3,16 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Dialog from 'primevue/dialog'
 import MiniPlayer from './components/MiniPlayer.vue'
+import NowPlaying from './components/NowPlaying.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import { useDevicesStore } from './stores/devices'
+import { useLocalPlayerStore } from './stores/localPlayer'
 import { useRecentStore } from './stores/recent'
 import { useFavoriteRadioStore } from './stores/favoriteRadio'
 import { getVersion, getLatestGitHubVersion, type VersionInfo } from './api/version'
+import { getHomeFeed, getMoodCategories } from './api/music'
 import { loadServerSettings } from './utils/settings'
+import type { Device } from './api/devices'
 
 // Initialise dark mode reactivity (side-effectful import)
 import './utils/darkMode'
@@ -18,11 +22,36 @@ const showSettings = ref(false)
 const router = useRouter()
 const sidebarOpen = ref(false)
 const devicesStore = useDevicesStore()
+const localPlayer = useLocalPlayerStore()
 const recentStore = useRecentStore()
 const favoriteRadioStore = useFavoriteRadioStore()
 
+// --- Now Playing sheet ---
+const audioEl = ref<HTMLAudioElement | null>(null)
+const nowPlayingDevice = ref<Device | null>(null)
+function openNowPlaying(device: Device) { nowPlayingDevice.value = device }
+function closeNowPlaying() { nowPlayingDevice.value = null }
+
+// --- PWA install prompt ---
+const installEvent = ref<any>(null)
+const canInstall = computed(() => !!installEvent.value)
+function onBeforeInstall(e: Event) {
+  e.preventDefault()
+  installEvent.value = e
+}
+async function promptInstall() {
+  if (!installEvent.value) return
+  installEvent.value.prompt()
+  await installEvent.value.userChoice
+  installEvent.value = null
+}
+
 onMounted(async () => {
-  if (!devicesStore.devices.length) {
+  if (audioEl.value) localPlayer.bindElement(audioEl.value)
+  window.addEventListener('beforeinstallprompt', onBeforeInstall)
+
+  // Only the local pseudo-device is present until we fetch real speakers.
+  if (!devicesStore.hasRealDevices) {
     await devicesStore.fetchDevices()
   }
   await devicesStore.fetchAllStates()
@@ -38,15 +67,21 @@ onMounted(async () => {
   // Load version info eagerly so it shows in sidebar immediately
   getVersion().then(v => { versionInfo.value = v }).catch(() => {})
   getLatestGitHubVersion().then(v => { latestVersion.value = v }).catch(() => {})
+
+  // Warm the Discover feed cache on the server so opening Discover is instant.
+  // Fire-and-forget: the backend caches the result (cache.discover_ttl).
+  getHomeFeed().catch(() => {})
+  getMoodCategories().catch(() => {})
 })
 
 onUnmounted(() => {
   devicesStore.cleanup()
+  window.removeEventListener('beforeinstallprompt', onBeforeInstall)
 })
 
 const navItems = [
   { label: 'Home', icon: 'mdi mdi-home-variant', to: '/' },
-  { label: 'Discover', icon: 'mdi mdi-compass-outline', to: '/search' },
+  { label: 'Discover', icon: 'mdi mdi-compass-outline', to: '/discover' },
   { label: 'Radio', icon: 'mdi mdi-radio', to: '/radio' },
   { label: 'Playlists', icon: 'mdi mdi-playlist-music', to: '/playlists' },
 ]
@@ -98,6 +133,10 @@ async function openChangelog() {
       </nav>
 
       <div class="sidebar-footer">
+        <button v-if="canInstall" class="sidebar-item" @click="promptInstall">
+          <i class="mdi mdi-download"></i>
+          <span>Install app</span>
+        </button>
         <button class="version-btn" @click="openChangelog">
           <i class="mdi mdi-tag-outline"></i>
           <span>v{{ versionInfo?.version ?? '…' }}</span>
@@ -153,8 +192,17 @@ async function openChangelog() {
         <router-view />
       </div>
 
-      <MiniPlayer />
+      <MiniPlayer @open="openNowPlaying" />
     </div>
+
+    <!-- Single hidden audio element that drives local (browser) playback -->
+    <audio ref="audioEl" hidden></audio>
+
+    <NowPlaying
+      v-if="nowPlayingDevice"
+      :device="nowPlayingDevice"
+      @close="closeNowPlaying"
+    />
   </div>
 </template>
 

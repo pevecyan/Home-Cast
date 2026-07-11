@@ -77,14 +77,14 @@ export interface MoodGroup {
   chips: MoodChip[]
 }
 
-export const getHomeFeed = () =>
-  api.get<HomeRow[]>('/music/home').then(r => r.data)
+export const getHomeFeed = (refresh = false) =>
+  api.get<HomeRow[]>('/music/home', { params: refresh ? { refresh: 1 } : {} }).then(r => r.data)
 
-export const getMoodCategories = () =>
-  api.get<MoodGroup[]>('/music/moods').then(r => r.data)
+export const getMoodCategories = (refresh = false) =>
+  api.get<MoodGroup[]>('/music/moods', { params: refresh ? { refresh: 1 } : {} }).then(r => r.data)
 
-export const getMoodPlaylists = (params: string) =>
-  api.get<DiscoverCard[]>(`/music/moods/${encodeURIComponent(params)}`).then(r => r.data)
+export const getMoodPlaylists = (params: string, refresh = false) =>
+  api.get<DiscoverCard[]>(`/music/moods/${encodeURIComponent(params)}`, { params: refresh ? { refresh: 1 } : {} }).then(r => r.data)
 
 export const searchMusic = (q: string, type: string = 'songs') =>
   api.get('/music/search', { params: { q, type } }).then(r => r.data)
@@ -106,3 +106,7 @@ export const playSong = (slug: string, type: string, videoId: string, shuffle = 
 
 export const playPlaylist = (slug: string, type: string, playlistId: string, shuffle = false, repeat = 'off') =>
   api.post('/music/play', { slug, type, playlistId, shuffle, repeat }).then(r => r.data)
+
+// Play an explicit ordered track list on a speaker (used for browser → speaker handoff).
+export const playTracksOn = (slug: string, type: string, tracks: Partial<Track>[], startIndex = 0, repeat = 'off') =>
+  api.post('/music/play', { slug, type, tracks, startIndex, repeat }).then(r => r.data)

@@ -22,6 +22,19 @@ onMounted(async () => {
   loading.value = false
 })
 
+// When a track's own thumbnail fails, fall back to the playlist's stored
+// album cover once, then to the static placeholder.
+function onTrackImgError(e: Event) {
+  const img = e.target as HTMLImageElement
+  const cover = playlist.value?.cover
+  if (cover && !img.dataset.coverTried && img.src !== cover) {
+    img.dataset.coverTried = '1'
+    img.src = cover
+    return
+  }
+  onImgError(e)
+}
+
 function startEditName() {
   nameInput.value = playlist.value?.name || ''
   editingName.value = true
@@ -78,23 +91,42 @@ async function moveTrack(from: number, to: number) {
         <button class="back-btn" @click="router.push('/playlists')">
           <i class="mdi mdi-arrow-left"></i>
         </button>
-        <div v-if="!editingName" class="title-row" @click="startEditName">
-          <h1 class="page-title">{{ playlist.name }}</h1>
-          <i class="mdi mdi-pencil edit-icon"></i>
-        </div>
-        <form v-else class="name-form" @submit.prevent="saveName">
-          <InputText
-            v-model="nameInput"
-            autofocus
-            style="flex: 1"
-            @keydown.escape="editingName = false"
-          />
-          <Button icon="pi pi-check" rounded text size="small" type="submit" :loading="saving" />
-          <Button icon="pi pi-times" rounded text size="small" severity="secondary" @click="editingName = false" />
-        </form>
       </div>
 
-      <div class="track-count">{{ playlist.tracks.length }} tracks</div>
+      <!-- Playlist hero: cover + title/author/count -->
+      <div class="playlist-hero">
+        <img
+          v-if="playlist.cover"
+          :src="playlist.cover"
+          class="hero-cover"
+          alt=""
+          @error="onImgError"
+        />
+        <div class="hero-cover placeholder img-fallback" :style="{ display: playlist.cover ? 'none' : 'flex' }">
+          <i class="mdi mdi-playlist-music"></i>
+        </div>
+        <div class="hero-meta">
+          <div v-if="!editingName" class="title-row" @click="startEditName">
+            <h1 class="page-title">{{ playlist.name }}</h1>
+            <i class="mdi mdi-pencil edit-icon"></i>
+          </div>
+          <form v-else class="name-form" @submit.prevent="saveName">
+            <InputText
+              v-model="nameInput"
+              autofocus
+              style="flex: 1"
+              @keydown.escape="editingName = false"
+            />
+            <Button icon="pi pi-check" rounded text size="small" type="submit" :loading="saving" />
+            <Button icon="pi pi-times" rounded text size="small" severity="secondary" @click="editingName = false" />
+          </form>
+          <div class="hero-sub">
+            <span v-if="playlist.author">{{ playlist.author }}</span>
+            <span v-if="playlist.author" class="sep">&middot;</span>
+            <span>{{ playlist.tracks.length }} tracks</span>
+          </div>
+        </div>
+      </div>
 
       <!-- Empty -->
       <div v-if="!playlist.tracks.length" class="empty">
@@ -112,13 +144,13 @@ async function moveTrack(from: number, to: number) {
         >
           <span class="track-num">{{ idx + 1 }}</span>
           <img
-            v-if="track.thumbnail"
-            :src="track.thumbnail"
+            v-if="track.thumbnail || playlist.cover"
+            :src="track.thumbnail || playlist.cover || ''"
             class="track-thumb"
             alt=""
-            @error="onImgError"
+            @error="onTrackImgError"
           />
-          <div class="track-thumb placeholder img-fallback" :style="{ display: track.thumbnail ? 'none' : 'flex' }">
+          <div class="track-thumb placeholder img-fallback" :style="{ display: (track.thumbnail || playlist.cover) ? 'none' : 'flex' }">
             <i class="mdi mdi-music-note"></i>
           </div>
           <div class="track-info">
@@ -165,7 +197,58 @@ async function moveTrack(from: number, to: number) {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+/* Playlist hero */
+.playlist-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.hero-cover {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.hero-cover.placeholder {
+  background: var(--placeholder-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--placeholder-color);
+  font-size: 2.2rem;
+}
+
+.hero-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.hero-sub > span:not(.sep) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hero-sub .sep {
+  flex-shrink: 0;
 }
 
 .back-btn {
@@ -222,13 +305,6 @@ async function moveTrack(from: number, to: number) {
   align-items: center;
   gap: 4px;
   flex: 1;
-}
-
-.track-count {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  margin-bottom: 16px;
-  padding-left: 36px;
 }
 
 /* Track list */

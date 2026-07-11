@@ -1,5 +1,21 @@
 [
   {
+    "version": "1.5.0",
+    "date": "2026-07-11",
+    "changes": [
+      "Local play: your browser is now a speaker — pick \"This device\" to play music directly in the browser/phone alongside Chromecast and Sonos",
+      "Transfer playback between the browser and any speaker in both directions, keeping the queue and current track",
+      "New full-screen Now Playing view with album art, a scrubbable progress bar (local play), volume, and the upcoming queue",
+      "Installable PWA: add Home Cast to your home screen with an app icon and offline-ready app shell",
+      "Discover feed and mood data are cached (default 15 min, configurable via cache.discover_ttl) and pre-warmed on app open, so opening Discover is instant instead of hitting YouTube Music every time",
+      "Refresh button on Discover to force-reload the home feed and moods, bypassing the cache",
+      "Missing/broken song cover art now falls back to the album or playlist cover",
+      "Saved playlists now store the author and cover, shown on the playlist list and detail views",
+      "Saving a playlist keeps the cover you saw (album/playlist artwork), stored as base64 so it loads without re-fetching",
+      "Search now remembers your query in the URL, so the back button returns you to your results instead of Discover"
+    ]
+  },
+  {
     "version": "1.4.1",
     "date": "2026-07-11",
     "changes": [
