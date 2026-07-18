@@ -347,13 +347,19 @@ function _resumeAfterNotification() {
 
 
 // --- Start ---
-// Advertise queue skip support so sender UIs (Google Home app, notification
-// controls) enable the next/previous buttons — without this the app grays them
-// out, even though CAF handles QUEUE_NEXT/QUEUE_PREV natively for a loaded
-// queue. The basic commands (pause/seek/volume) are on by default.
+// Advertise which transport commands sender UIs (Google Home app, notification
+// controls) may show. NOTE: this REPLACES the default command set, so we must
+// include the basic commands (pause/seek/volume/mute) alongside the queue skip
+// commands — otherwise play/pause and scrubbing disappear from the app.
 const Command = cast.framework.messages.Command;
 context.start({
   disableIdleTimeout: false,
   playbackConfig: new cast.framework.PlaybackConfig(),
-  supportedCommands: Command.QUEUE_NEXT | Command.QUEUE_PREV,
+  supportedCommands:
+    Command.PAUSE |
+    Command.SEEK |
+    Command.STREAM_VOLUME |
+    Command.STREAM_MUTE |
+    Command.QUEUE_NEXT |
+    Command.QUEUE_PREV,
 });
