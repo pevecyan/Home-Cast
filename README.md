@@ -9,6 +9,7 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 - **Discover** — YouTube Music home feed and mood/genre browsing, cached for instant loads
 - **Radio** — search via Radio Browser API, play live streams
 - **Saved playlists** — create and manage local playlists, with author and cover art
+- **Alarms** — schedule music or radio on any speaker at a set time (weekdays or one-shot), with optional volume and fade-in; runs server-side
 - **Now Playing** — full-screen view with album art, scrubbable progress (local play), and the upcoming queue
 - **Queue** — shuffle, repeat (off / all / one), next / prev, sleep timer, playlist browser, transfer to another speaker (or the browser)
 - **Notification sound** — interrupt playback with a sound clip, then resume from the same position
@@ -23,6 +24,16 @@ A self-hosted home audio controller with a Vue 3 UI. Controls **Chromecast** and
 </p>
 
 ## Changelog
+
+### v1.6.0 — 2026-07-18
+- **Alarms**: schedule music or radio to start on any speaker at a set time, on chosen weekdays or as a one-shot, with optional starting volume and fade-in
+- Alarms run on the server, so they fire even when no browser or phone app is open
+- **Skip works when casting from the YouTube Music app**: next/previous now control whatever cast app owns the speaker, and the buttons enable only when that session actually supports skipping
+- The custom receiver now advertises skip support, so next/previous are no longer grayed out in the Google Home app and notification controls
+- Tap the now-playing track on a speaker card to open the full-screen player (instead of an inline list)
+- Full-screen player: cover art shrinks when you scroll the queue so it no longer takes half the screen, and the transport controls are centered on play/pause
+- Cover art falls back to the playlist cover across the full-screen player, speaker cards, and the TV receiver when a song's own artwork is missing or fails to load
+- Fixed casting a saved playlist with a stored cover breaking playback (the embedded cover overflowed the Chromecast message and dropped the connection)
 
 ### v1.5.1 — 2026-07-11
 - Fixed the Discover tab freezing the browser in production — a render loop in the feed's scroll-position tracking spun the main thread (masked in development by Vue's recursive-update guard)

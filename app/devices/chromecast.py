@@ -240,6 +240,53 @@ def resume(cc):
     return {"status": "playing"}
 
 
+class SkipUnsupported(Exception):
+    """Raised when the running receiver's media session can't skip tracks."""
+
+
+def _refresh_media_status(cc, timeout=3):
+    """Block until a fresh MediaStatus arrives from the receiver.
+
+    The cached ``media_controller.status`` on a long-lived connection is often
+    stale or empty (title/command flags unset) until the receiver next pushes
+    an update. We need a current status to read per-track skip support
+    (``supports_queue_next``/``prev``), which YouTube Music toggles per track,
+    so request one and wait for the push.
+    """
+    import threading
+
+    done = threading.Event()
+    cc.media_controller.update_status(callback_function=lambda *_: done.set())
+    done.wait(timeout)
+
+
+def next_track(cc):
+    """Skip to the next track on whatever receiver is running.
+
+    Used when there's no home-cast queue for this device (e.g. the official
+    YouTube Music cast app owns the session). Sends a standard media-namespace
+    QUEUE_NEXT, which the running receiver's own queue handles. Only fires when
+    the session advertises queue support — radio streams and other queue-less
+    media report it as unsupported, so we don't send a no-op skip.
+    """
+    mc = cc.media_controller
+    _refresh_media_status(cc)
+    if not mc.status.supports_queue_next:
+        raise SkipUnsupported("This media can't skip to the next track")
+    mc.queue_next()
+    return {"status": "next"}
+
+
+def prev_track(cc):
+    """Skip to the previous track on whatever receiver is running (see next_track)."""
+    mc = cc.media_controller
+    _refresh_media_status(cc)
+    if not mc.status.supports_queue_prev:
+        raise SkipUnsupported("This media can't skip to the previous track")
+    mc.queue_prev()
+    return {"status": "previous"}
+
+
 def stop(cc):
     for slug, q in list(_queues.items()):
         if q.cc is cc:
@@ -280,7 +327,16 @@ def get_state(cc):
             result["queue"] = q.get_queue_info()
             has_queue = True
             break
-    if not has_queue and status != "IDLE":
+    if has_queue:
+        # Our custom receiver always has a skippable multi-track queue.
+        result["canNext"] = True
+        result["canPrev"] = True
+    elif status != "IDLE":
+        # Another cast app owns the session (e.g. YouTube Music). The cached
+        # status is often stale here (empty title, skip flags unset), so pull a
+        # fresh one before reading now-playing metadata and skip support.
+        _refresh_media_status(cc, timeout=1.5)
+        mc_status = cc.media_controller.status
         media_meta = mc_status.media_metadata or {}
         images = media_meta.get("images", [])
         result["nowPlaying"] = {
@@ -288,6 +344,13 @@ def get_state(cc):
             "thumbnail": images[0].get("url") if images else None,
             "contentId": mc_status.content_id,
         }
+        # Expose whether the session supports skipping so the UI can
+        # enable/disable next/prev (YouTube Music toggles these per track).
+        result["canNext"] = bool(mc_status.supports_queue_next)
+        result["canPrev"] = bool(mc_status.supports_queue_prev)
+    else:
+        result["canNext"] = False
+        result["canPrev"] = False
     return result
 
 
@@ -456,6 +519,12 @@ class CustomReceiverQueue(MediaStatusListener):
     def _build_metadata(self, track):
         artists = track.get("artists", [])
         thumb = track.get("thumbnail")
+        # Never send base64 data: URIs to the receiver — a large image embedded on
+        # every queue item overflows the Cast custom-message size limit and breaks
+        # the socket. The receiver needs a real HTTP URL; the base64 playlist-cover
+        # fallback is only for the web UI (which reads it from get_state).
+        if thumb and thumb.startswith("data:"):
+            thumb = None
         return {
             "metadataType": 3,  # MusicTrackMediaMetadata
             "title": track.get("title"),

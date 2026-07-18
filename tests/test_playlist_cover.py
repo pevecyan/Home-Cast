@@ -146,3 +146,29 @@ def test_update_does_not_refetch_existing_cover(fake_get):
     # cover already present -> not refetched, unchanged
     assert updated["cover"] == original_cover
     assert fake_get.calls == []
+
+
+# --- Cover fallback applied to cast/queue tracks (player._with_fallback_cover) ---
+
+def test_fallback_cover_fills_only_missing_thumbnails():
+    from app.music.player import _with_fallback_cover
+
+    tracks = [
+        {"videoId": "a", "thumbnail": "http://img/a.jpg"},
+        {"videoId": "b"},                      # no thumbnail -> gets the cover
+        {"videoId": "c", "thumbnail": None},   # falsy -> gets the cover
+    ]
+    out = _with_fallback_cover(tracks, "data:image/jpeg;base64,COVER")
+
+    assert out[0]["thumbnail"] == "http://img/a.jpg"   # own thumbnail preserved
+    assert out[1]["thumbnail"] == "data:image/jpeg;base64,COVER"
+    assert out[2]["thumbnail"] == "data:image/jpeg;base64,COVER"
+    # original list not mutated
+    assert "thumbnail" not in tracks[1]
+
+
+def test_fallback_cover_noop_without_cover():
+    from app.music.player import _with_fallback_cover
+
+    tracks = [{"videoId": "a"}]
+    assert _with_fallback_cover(tracks, None) is tracks

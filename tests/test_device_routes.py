@@ -81,6 +81,52 @@ def test_next_prev_sonos(client, registry):
     assert ("previous",) in device.calls
 
 
+def test_next_prev_chromecast_foreign_app_when_supported(client, registry):
+    # No home-cast queue: skip is delegated to the running cast app (e.g. the
+    # official YouTube Music receiver) over the media namespace.
+    cc = registry.add_chromecast("kitchen", player_state="PLAYING")
+    cc.media_controller.status.supports_queue_next = True
+    cc.media_controller.status.supports_queue_prev = True
+
+    r1 = client.post("/device/slug/next", json={"slug": "kitchen", "type": "chromecast"})
+    r2 = client.post("/device/slug/prev", json={"slug": "kitchen", "type": "chromecast"})
+
+    assert r1.get_json() == {"status": "next"}
+    assert r2.get_json() == {"status": "previous"}
+    assert ("queue_next",) in cc.calls
+    assert ("queue_prev",) in cc.calls
+
+
+def test_next_chromecast_foreign_app_unsupported(client, registry):
+    # Radio and other queue-less media don't advertise skip support: refuse
+    # rather than send a no-op skip.
+    cc = registry.add_chromecast("kitchen", player_state="PLAYING")
+    cc.media_controller.status.supports_queue_next = False
+
+    resp = client.post("/device/slug/next", json={"slug": "kitchen", "type": "chromecast"})
+
+    assert resp.status_code == 400
+    assert ("queue_next",) not in cc.calls
+
+
+# --- Cast queue metadata ---
+
+def test_build_metadata_strips_base64_cover(registry):
+    # A base64 data: URI cover must NOT be sent to the receiver — embedding a
+    # large image on every queue item overflows the Cast custom-message size
+    # limit and breaks the socket. A real URL is passed through.
+    from app.devices.chromecast import CustomReceiverQueue
+
+    cc = registry.add_chromecast("kitchen")
+    q = CustomReceiverQueue(cc, cache=None, cast_app_id=None)
+
+    data_meta = q._build_metadata({"title": "A", "thumbnail": "data:image/jpeg;base64,ABCD"})
+    assert data_meta["images"] == []
+
+    url_meta = q._build_metadata({"title": "B", "thumbnail": "http://img/b.jpg"})
+    assert url_meta["images"] == [{"url": "http://img/b.jpg"}]
+
+
 # --- Device-not-found handling ---
 
 def test_pause_unknown_device_404_style(client, registry):

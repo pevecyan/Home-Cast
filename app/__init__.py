@@ -11,6 +11,8 @@ from app.music.routes import music_bp
 from app.music.downloader import init_cache
 from app.media.routes import media_bp
 from app.radio.routes import radio_bp
+from app.schedule.routes import schedule_bp
+from app.schedule.scheduler import start_scheduler
 from app.storage_routes import storage_bp
 from app.ws import socketio, start_poll_thread
 
@@ -50,11 +52,13 @@ def create_app(config_path="config.yaml"):
     flask_app.register_blueprint(music_bp)
     flask_app.register_blueprint(media_bp)
     flask_app.register_blueprint(radio_bp)
+    flask_app.register_blueprint(schedule_bp)
     flask_app.register_blueprint(storage_bp)
 
     socketio.init_app(flask_app)
 
     start_cache_updater()
     start_poll_thread()
+    start_scheduler(flask_app)
 
     return flask_app

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Slider from 'primevue/slider'
 import { useDevicesStore } from '../stores/devices'
 import { useLocalPlayerStore } from '../stores/localPlayer'
-import { onImgError } from '../utils/imgFallback'
+import { onImgErrorWithFallback } from '../utils/imgFallback'
 import { deviceIcon } from '../utils/deviceIcon'
 import type { Device } from '../api/devices'
 
@@ -20,11 +20,22 @@ const currentTrack = computed(() => queue.value?.currentTrack ?? null)
 const isActive = computed(() => state.value?.status === 'PLAYING' || state.value?.status === 'PAUSED')
 const isPlaying = computed(() => state.value?.status === 'PLAYING')
 const hasQueue = computed(() => !!queue.value)
+const canNext = computed(() => state.value?.canNext ?? false)
+const canPrev = computed(() => state.value?.canPrev ?? false)
 const repeatMode = computed(() => queue.value?.repeat ?? 'off')
 
 const title = computed(() => currentTrack.value?.title || state.value?.nowPlaying?.title || 'Nothing playing')
 const artist = computed(() => currentTrack.value?.artists?.join(', ') || '')
 const thumb = computed(() => currentTrack.value?.thumbnail || state.value?.nowPlaying?.thumbnail)
+
+// A cover to fall back to when the current track's own thumbnail fails to load:
+// the playlist cover the backend backfilled (base64 data: URI on tracks that had
+// no thumbnail of their own), else the first queue track that does have one.
+const fallbackCover = computed(() => {
+  const tracks = queue.value?.tracks ?? []
+  const dataUri = tracks.find(t => t.thumbnail?.startsWith('data:'))?.thumbnail
+  return dataUri || tracks.find(t => t.thumbnail)?.thumbnail
+})
 
 // --- Progress (local only — the backend does not expose position for speakers) ---
 const showProgress = computed(() => isLocal.value && !!currentTrack.value)
@@ -59,6 +70,20 @@ function next() { devicesStore.next(props.device) }
 function prev() { devicesStore.prev(props.device) }
 function cycleRepeat() { devicesStore.cycleRepeat(props.device) }
 function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
+
+// --- Collapse-on-scroll ---
+// The moment the user starts scrolling the queue, shrink the cover art to its
+// compact size and keep it there for the rest of this session (the overlay is
+// re-created each time it opens, so `collapsed` resets to false on reopen).
+// This is a one-way latch: because the art lives outside the scroll container,
+// interpolating its size against scrollTop would reflow the queue and feed back
+// into the scroll position — a latch avoids that jitter entirely.
+const collapsed = ref(false)
+function onQueueScroll(e: Event) {
+  if (!collapsed.value && (e.target as HTMLElement).scrollTop > 0) {
+    collapsed.value = true
+  }
+}
 </script>
 
 <template>
@@ -75,10 +100,17 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
         <span class="np-spacer"></span>
       </header>
 
-      <div class="np-top">
+      <div class="np-top" :class="{ collapsed }">
       <div class="np-art-wrap">
-        <img v-if="thumb" :src="thumb" class="np-art" alt="" @error="onImgError" />
-        <div v-else class="np-art placeholder">
+        <img
+          v-if="thumb"
+          :key="thumb"
+          :src="thumb"
+          class="np-art"
+          alt=""
+          @error="onImgErrorWithFallback(() => fallbackCover)"
+        />
+        <div class="np-art placeholder img-fallback" :style="{ display: thumb ? 'none' : 'flex' }">
           <i class="mdi mdi-music"></i>
         </div>
       </div>
@@ -98,27 +130,31 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
         <span class="np-time">{{ fmt(duration) }}</span>
       </div>
 
-      <!-- Transport -->
+      <!-- Transport. Three equal zones keep play/pause dead center regardless
+           of how many buttons flank it. -->
       <div class="np-controls">
-        <button
-          class="np-ctrl"
-          :class="{ 'ctrl-active': repeatMode !== 'off' }"
-          :disabled="!hasQueue"
-          @click="cycleRepeat"
-          title="Repeat"
-        >
-          <i :class="repeatIcon"></i>
-        </button>
-        <button class="np-ctrl" :disabled="!hasQueue" @click="prev" title="Previous">
-          <i class="mdi mdi-skip-previous"></i>
-        </button>
+        <div class="np-ctrl-side np-ctrl-side--left">
+          <button
+            class="np-ctrl"
+            :class="{ 'ctrl-active': repeatMode !== 'off' }"
+            :disabled="!hasQueue"
+            @click="cycleRepeat"
+            title="Repeat"
+          >
+            <i :class="repeatIcon"></i>
+          </button>
+          <button class="np-ctrl" :disabled="!canPrev" @click="prev" title="Previous">
+            <i class="mdi mdi-skip-previous"></i>
+          </button>
+        </div>
         <button class="np-ctrl np-play" :disabled="!isActive" @click="togglePlayPause">
           <i :class="isPlaying ? 'mdi mdi-pause' : 'mdi mdi-play'"></i>
         </button>
-        <button class="np-ctrl" :disabled="!hasQueue" @click="next" title="Next">
-          <i class="mdi mdi-skip-next"></i>
-        </button>
-        <span class="np-ctrl-spacer"></span>
+        <div class="np-ctrl-side np-ctrl-side--right">
+          <button class="np-ctrl" :disabled="!canNext" @click="next" title="Next">
+            <i class="mdi mdi-skip-next"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Volume -->
@@ -130,7 +166,7 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
       </div>
 
       <!-- Queue (only this scrolls) -->
-      <div v-if="queue?.tracks?.length" class="np-queue">
+      <div v-if="queue?.tracks?.length" class="np-queue" @scroll="onQueueScroll">
         <div class="np-queue-head">Up next</div>
         <div
           v-for="(t, i) in queue.tracks"
@@ -139,8 +175,17 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
           :class="{ active: i === queue.currentIndex }"
           @click="jumpTo(i)"
         >
-          <img v-if="t.thumbnail" :src="t.thumbnail" class="np-q-thumb" alt="" @error="onImgError" />
-          <div v-else class="np-q-thumb placeholder"><i class="mdi mdi-music-note"></i></div>
+          <img
+            v-if="t.thumbnail"
+            :key="t.thumbnail"
+            :src="t.thumbnail"
+            class="np-q-thumb"
+            alt=""
+            @error="onImgErrorWithFallback(() => fallbackCover)"
+          />
+          <div class="np-q-thumb placeholder img-fallback" :style="{ display: t.thumbnail ? 'none' : 'flex' }">
+            <i class="mdi mdi-music-note"></i>
+          </div>
           <div class="np-q-info">
             <div class="np-q-title">{{ t.title }}</div>
             <div class="np-q-artist">{{ t.artists?.join(', ') }}</div>
@@ -179,7 +224,9 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
   animation: np-pop 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Pinned block: art, title, progress, transport, volume — never scrolls */
+/* Pinned block: art, title, progress, transport, volume — never scrolls.
+   Gets `.collapsed` once the user starts scrolling the queue, which shrinks the
+   cover art so it doesn't hog the screen while browsing. */
 .np-top {
   flex-shrink: 0;
 }
@@ -212,11 +259,15 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
   .np-art-wrap {
     margin: 4px 0 12px;
   }
+  .np-top.collapsed .np-art-wrap {
+    margin: 2px 0 8px;
+  }
 
   .np-art {
     width: min(58vw, 240px);
     height: min(58vw, 240px);
   }
+  /* Collapsed size (76px) is inherited from the base rule. */
 
   @keyframes np-rise {
     from { transform: translateY(100%); }
@@ -258,6 +309,10 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
   display: flex;
   justify-content: center;
   margin: 8px 0 20px;
+  transition: margin 0.2s ease;
+}
+.np-top.collapsed .np-art-wrap {
+  margin: 4px 0 12px;
 }
 
 .np-art {
@@ -266,6 +321,11 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
   border-radius: 14px;
   object-fit: cover;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  transition: width 0.2s ease, height 0.2s ease;
+}
+.np-top.collapsed .np-art {
+  width: 76px;
+  height: 76px;
 }
 
 .np-art.placeholder {
@@ -321,6 +381,16 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
   gap: 18px;
   margin-bottom: 20px;
 }
+/* Equal-width side zones so the play button stays dead center even though the
+   left side has more buttons (repeat + prev) than the right (next). */
+.np-ctrl-side {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.np-ctrl-side--left { justify-content: flex-end; }
+.np-ctrl-side--right { justify-content: flex-start; }
 
 .np-ctrl {
   border: none;
@@ -346,7 +416,6 @@ function jumpTo(i: number) { devicesStore.jumpToTrack(props.device, i) }
   font-size: 2rem;
 }
 
-.np-ctrl-spacer { width: 0; }
 
 .np-volume {
   display: flex;

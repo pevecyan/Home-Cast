@@ -34,6 +34,12 @@ export const useDevicesStore = defineStore('devices', () => {
   const volumeLocked = ref<Record<string, boolean>>({})
   const wsConnected = ref(false)
 
+  // Full-screen Now Playing overlay target (null = closed). Lives in the store
+  // so any view (speaker cards, mini player) can open it; App renders it.
+  const nowPlayingDevice = ref<Device | null>(null)
+  function openNowPlaying(device: Device) { nowPlayingDevice.value = device }
+  function closeNowPlaying() { nowPlayingDevice.value = null }
+
   let socket: Socket | null = null
   let pollInterval: number | null = null
 
@@ -308,6 +314,9 @@ export const useDevicesStore = defineStore('devices', () => {
     loading,
     refreshing,
     wsConnected,
+    nowPlayingDevice,
+    openNowPlaying,
+    closeNowPlaying,
     hasRealDevices,
     fetchDevices,
     fetchState,

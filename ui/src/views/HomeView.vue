@@ -150,7 +150,7 @@ function onVolumeChange(device: Device, volume: number) {
               @volume-change="onVolumeChange"
               :volume-locked="store.isVolumeLocked(device)"
               @toggle-volume-lock="store.toggleVolumeLock(device)"
-              @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+              @open="(d: Device) => store.openNowPlaying(d)"
               @transfer="(from: Device, to: Device) => store.transfer(from, to)"
             />
             <!-- Always show group members when group is active -->
@@ -170,7 +170,7 @@ function onVolumeChange(device: Device, volume: number) {
                 @volume-change="onVolumeChange"
                 :volume-locked="store.isVolumeLocked(member)"
                 @toggle-volume-lock="store.toggleVolumeLock(member)"
-                @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+                @open="(d: Device) => store.openNowPlaying(d)"
                 @transfer="(from: Device, to: Device) => store.transfer(from, to)"
               />
             </div>
@@ -186,7 +186,7 @@ function onVolumeChange(device: Device, volume: number) {
             @cycle-repeat="store.cycleRepeat(device)"
             @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
             @volume-change="onVolumeChange"
-            @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+            @open="(d: Device) => store.openNowPlaying(d)"
             @transfer="(from: Device, to: Device) => store.transfer(from, to)"
           />
         </template>
@@ -209,7 +209,7 @@ function onVolumeChange(device: Device, volume: number) {
               @volume-change="onVolumeChange"
               :volume-locked="store.isVolumeLocked(device)"
               @toggle-volume-lock="store.toggleVolumeLock(device)"
-              @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+              @open="(d: Device) => store.openNowPlaying(d)"
               @transfer="(from: Device, to: Device) => store.transfer(from, to)"
             />
             <!-- Expand/collapse button -->
@@ -238,7 +238,7 @@ function onVolumeChange(device: Device, volume: number) {
                 @volume-change="onVolumeChange"
                 :volume-locked="store.isVolumeLocked(member)"
                 @toggle-volume-lock="store.toggleVolumeLock(member)"
-                @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+                @open="(d: Device) => store.openNowPlaying(d)"
                 @transfer="(from: Device, to: Device) => store.transfer(from, to)"
               />
             </div>
@@ -255,7 +255,7 @@ function onVolumeChange(device: Device, volume: number) {
             @cycle-repeat="store.cycleRepeat(device)"
             @set-sleep="(d: any, m: number) => store.setSleep(d, m)"
             @volume-change="onVolumeChange"
-            @jump-to-track="(d: Device, i: number) => store.jumpToTrack(d, i)"
+            @open="(d: Device) => store.openNowPlaying(d)"
             @transfer="(from: Device, to: Device) => store.transfer(from, to)"
           />
         </template>

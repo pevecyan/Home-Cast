@@ -27,10 +27,12 @@ const recentStore = useRecentStore()
 const favoriteRadioStore = useFavoriteRadioStore()
 
 // --- Now Playing sheet ---
+// Overlay target lives in the devices store so any view (mini player, speaker
+// cards) can open it; App just renders it.
 const audioEl = ref<HTMLAudioElement | null>(null)
-const nowPlayingDevice = ref<Device | null>(null)
-function openNowPlaying(device: Device) { nowPlayingDevice.value = device }
-function closeNowPlaying() { nowPlayingDevice.value = null }
+const nowPlayingDevice = computed(() => devicesStore.nowPlayingDevice)
+function openNowPlaying(device: Device) { devicesStore.openNowPlaying(device) }
+function closeNowPlaying() { devicesStore.closeNowPlaying() }
 
 // --- PWA install prompt ---
 const installEvent = ref<any>(null)
@@ -83,6 +85,7 @@ const navItems = [
   { label: 'Home', icon: 'mdi mdi-home-variant', to: '/' },
   { label: 'Discover', icon: 'mdi mdi-compass-outline', to: '/discover' },
   { label: 'Radio', icon: 'mdi mdi-radio', to: '/radio' },
+  { label: 'Alarms', icon: 'mdi mdi-alarm', to: '/alarms' },
   { label: 'Playlists', icon: 'mdi mdi-playlist-music', to: '/playlists' },
 ]
 

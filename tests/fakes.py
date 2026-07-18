@@ -16,6 +16,9 @@ class _MediaControllerStatus:
         self.content_id = None
         self.title = None
         self.media_metadata = {}
+        # Per-track skip support advertised by the running receiver.
+        self.supports_queue_next = False
+        self.supports_queue_prev = False
 
     @property
     def player_is_paused(self):
@@ -36,8 +39,20 @@ class _FakeMediaController:
         self.status.player_state = "PLAYING"
         self.status.content_id = url
 
-    def block_until_active(self):
+    def block_until_active(self, timeout=None):
         pass
+
+    def update_status(self, *, callback_function=None):
+        # Real controller pushes asynchronously; here the status is already
+        # current, so fire the callback immediately.
+        if callback_function is not None:
+            callback_function(True, None)
+
+    def queue_next(self):
+        self._owner.calls.append(("queue_next",))
+
+    def queue_prev(self):
+        self._owner.calls.append(("queue_prev",))
 
     def pause(self):
         self._owner.calls.append(("pause",))

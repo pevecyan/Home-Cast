@@ -45,6 +45,12 @@ export interface DeviceState {
   queue?: QueueInfo
   nowPlaying?: NowPlaying
   sleepTimer?: SleepTimer
+  // Whether the running session can skip tracks. True for our multi-track
+  // queue; for a foreign cast app (e.g. YouTube Music) it reflects the
+  // session's advertised support; false/absent for radio and other
+  // queue-less media.
+  canNext?: boolean
+  canPrev?: boolean
 }
 
 export const getDevices = () =>

@@ -34,6 +34,11 @@ const router = createRouter({
       component: () => import('../views/RadioView.vue'),
     },
     {
+      path: '/alarms',
+      name: 'alarms',
+      component: () => import('../views/AlarmsView.vue'),
+    },
+    {
       path: '/playlists',
       name: 'playlists',
       component: () => import('../views/SavedPlaylistsView.vue'),

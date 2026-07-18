@@ -3,7 +3,8 @@ import logging
 import requests
 from flask import Blueprint, request, jsonify
 
-from app.devices import chromecast, sonos
+from app.music import player
+from app.music.player import PlayError
 
 logger = logging.getLogger(__name__)
 
@@ -88,29 +89,11 @@ def play_station():
     if not slug or not station_url:
         return jsonify({"error": "Missing slug or stationUrl"}), 400
 
-    if device_type == "sonos":
-        device = sonos.get_by_slug(slug)
-        if not device:
-            return jsonify({"error": "Sonos device not found"}), 400
-        sonos.play_media(device, station_url)
-    else:
-        cc = chromecast.get_by_slug(slug)
-        if not cc:
-            return jsonify({"error": "Chromecast device not found"}), 400
-
-        metadata = {
-            "metadataType": 0,
-            "title": station_name,
-            "images": [{"url": station_favicon}] if station_favicon else [],
-        }
-        cc.media_controller.play_media(
-            station_url,
-            "audio/mpeg",
-            title=station_name,
-            thumb=station_favicon,
-            metadata=metadata,
-            stream_type="LIVE",
+    try:
+        result = player.play_radio(
+            slug, device_type, station_url,
+            station_name=station_name, station_favicon=station_favicon,
         )
-        cc.media_controller.block_until_active()
-
-    return jsonify({"status": "playing", "station": station_name})
+    except PlayError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(result)

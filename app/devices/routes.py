@@ -312,14 +312,20 @@ def next_by_slug():
                 raise ValueError("Device not found")
             return sonos.next_track(device)
         queue = chromecast.get_queue(slug)
-        if not queue:
-            raise ValueError("No active queue for this device")
-        queue.play_next()
-        return {"status": "next"}
+        if queue:
+            queue.play_next()
+            return {"status": "next"}
+        # No home-cast queue: another cast app (e.g. official YouTube Music)
+        # owns the session — skip via its own queue over the media namespace,
+        # but only if that session actually supports skipping.
+        device = chromecast.get_by_slug(slug)
+        if not device:
+            raise ValueError("Device not found")
+        return chromecast.next_track(device)
 
     try:
         out = _fan_out(data.get("slug"), data.get("type"), act)
-    except ValueError as e:
+    except (ValueError, chromecast.SkipUnsupported) as e:
         return jsonify({"error": str(e)}), 400
     return _respond(out)
 
@@ -335,14 +341,18 @@ def prev_by_slug():
                 raise ValueError("Device not found")
             return sonos.prev_track(device)
         queue = chromecast.get_queue(slug)
-        if not queue:
-            raise ValueError("No active queue for this device")
-        queue.play_prev()
-        return {"status": "previous"}
+        if queue:
+            queue.play_prev()
+            return {"status": "previous"}
+        # No home-cast queue: skip via the running cast app's own queue (see above).
+        device = chromecast.get_by_slug(slug)
+        if not device:
+            raise ValueError("Device not found")
+        return chromecast.prev_track(device)
 
     try:
         out = _fan_out(data.get("slug"), data.get("type"), act)
-    except ValueError as e:
+    except (ValueError, chromecast.SkipUnsupported) as e:
         return jsonify({"error": str(e)}), 400
     return _respond(out)
 

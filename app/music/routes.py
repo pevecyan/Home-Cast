@@ -8,8 +8,13 @@ logger = logging.getLogger(__name__)
 
 from app.music import ytmusic
 from app.music import playlist as pl
+from app.music import player
+from app.music.player import PlayError
 from app.music.downloader import get_cache
 from app.devices import chromecast, sonos
+
+# In-memory M3U store (generated playlists) — shared with the scheduler.
+_m3u_store = player._m3u_store
 
 music_bp = Blueprint("music", __name__, url_prefix="/music")
 
@@ -308,10 +313,6 @@ def transfer():
     return jsonify({"status": "transferred", "trackCount": len(tracks)})
 
 
-# In-memory M3U store (generated playlists)
-_m3u_store = {}
-
-
 @music_bp.route("/m3u/<m3u_id>.m3u", methods=["GET"])
 def serve_m3u(m3u_id):
     content = _m3u_store.get(m3u_id)
@@ -387,51 +388,13 @@ def play_saved_playlist(playlist_id):
     shuffle = data.get("shuffle", False)
     repeat = data.get("repeat", "off")
 
-    saved = pl.get_playlist(playlist_id)
-    if not saved:
-        return jsonify({"error": "Playlist not found"}), 404
-
-    tracks = saved.get("tracks", [])
-    if not tracks:
-        return jsonify({"error": "Playlist is empty"}), 400
-
-    cache = get_cache()
-    hostname = current_app.config["APP"]["hostname"]
-
-    # download first track
     try:
-        cache.ensure_song(tracks[0]["videoId"])
-    except RuntimeError as e:
-        return jsonify({"error": f"Failed to download: {e}"}), 500
-
-    if len(tracks) > 1:
-        threading.Thread(
-            target=_download_remaining,
-            args=(cache, tracks[1:]),
-            daemon=True,
-        ).start()
-
-    if device_type == "sonos":
-        m3u_content = pl.generate_m3u(tracks, hostname)
-        _m3u_store[playlist_id] = m3u_content
-        m3u_url = f"{hostname}/music/m3u/{playlist_id}.m3u"
-        device = sonos.get_by_slug(slug)
-        if not device:
-            return jsonify({"error": "Sonos device not found"}), 400
-        sonos.play_media(device, m3u_url)
-        if shuffle:
-            sonos.set_shuffle(device, True)
-        if repeat != "off":
-            sonos.set_repeat(device, repeat)
-    else:
-        cc = chromecast.get_by_slug(slug)
-        if not cc:
-            return jsonify({"error": "Chromecast device not found"}), 400
-        cast_app_id = current_app.config["APP"].get("cast_app_id")
-        queue = chromecast.get_queue(slug, cc, cache, cast_app_id=cast_app_id)
-        queue.load(tracks, shuffle=shuffle, repeat=repeat)
-
-    return jsonify({
-        "status": "playing",
-        "trackCount": len(tracks),
-    })
+        result = player.play_saved_playlist(
+            current_app.config["APP"], playlist_id, slug, device_type,
+            shuffle=shuffle, repeat=repeat,
+        )
+    except PlayError as e:
+        msg = str(e)
+        status = 404 if msg == "Playlist not found" else 400
+        return jsonify({"error": msg}), status
+    return jsonify(result)
